@@ -15,6 +15,7 @@
     "lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
     "shopify": "shopify",
     "prisma": "prisma",
+    "supabase": "supabase",
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
     "typecheck": "react-router typegen && tsc --noEmit"
@@ -30,15 +31,16 @@
     "@react-router/node": "^7.12.0",
     "@react-router/serve": "^7.12.0",
     "@shopify/app-bridge-react": "^4.2.4",
+    "@shopify/cli": "3.91.0",
     "@shopify/shopify-app-react-router": "^1.1.0",
     "@shopify/shopify-app-session-storage-prisma": "^8.0.0",
+    "@supabase/supabase-js": "^2.98.0",
     "isbot": "^5.1.31",
     "prisma": "^6.16.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router": "^7.12.0",
-    "vite-tsconfig-paths": "^5.1.4",
-    "@shopify/cli": "3.91.0"
+    "vite-tsconfig-paths": "^5.1.4"
   },
   "devDependencies": {
     "@shopify/api-codegen-preset": "^1.2.0",
@@ -57,6 +59,7 @@
     "eslint-plugin-react-hooks": "^4.6.2",
     "graphql-config": "^5.1.1",
     "prettier": "^3.6.2",
+    "supabase": "^2.76.16",
     "typescript": "^5.9.3",
     "vite": "^6.3.6"
   },
