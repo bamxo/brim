@@ -290,7 +290,7 @@ export default function PurchaseOrderDetail() {
                         name="quantity"
                         label="Quantity"
                         label-hidden
-                        min="0"
+                        min={0}
                         value={String(line.quantity_ordered)}
                       />
                     ) : (
@@ -319,7 +319,7 @@ export default function PurchaseOrderDetail() {
           </s-table>
           {isDraft && (
             <s-stack direction="inline" gap="base">
-              <s-button submit>Update quantities</s-button>
+              <s-button type="submit">Update quantities</s-button>
             </s-stack>
           )}
         </form>

@@ -75,11 +75,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   let cursor: string | null = null;
   let hasNextPage = true;
 
+  type ProductsQueryData = {
+    products?: {
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      nodes: ShopifyProduct[];
+    };
+  };
+
   while (hasNextPage) {
-    const response = await admin.graphql(PRODUCTS_QUERY, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response = await (admin.graphql as any)(PRODUCTS_QUERY, {
       variables: { cursor },
     });
-    const { data } = await response.json();
+    const { data } = (await response.json()) as { data?: ProductsQueryData };
     const productsPage = data?.products;
 
     if (!productsPage) break;
@@ -157,7 +165,7 @@ export default function ProductsSync() {
         <form method="post">
           <s-button
             variant="primary"
-            submit
+            type="submit"
             {...(isSyncing ? { loading: true } : {})}
           >
             {isSyncing ? "Syncing…" : "Start sync"}

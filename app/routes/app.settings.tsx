@@ -79,12 +79,11 @@ export default function Settings() {
             name="notification_channel"
             label="Notification channel"
             value={settings?.notification_channel ?? "email"}
-            options={JSON.stringify([
-              { label: "Email", value: "email" },
-              { label: "Shopify", value: "shopify" },
-              { label: "Both", value: "both" },
-            ])}
-          />
+          >
+            <s-option value="email">Email</s-option>
+            <s-option value="shopify">Shopify</s-option>
+            <s-option value="both">Both</s-option>
+          </s-select>
         </s-section>
 
         <s-section heading="Purchase orders">
@@ -92,39 +91,35 @@ export default function Settings() {
             name="default_send_method"
             label="Default send method"
             value={settings?.default_send_method ?? "ask"}
-            options={JSON.stringify([
-              { label: "Always ask", value: "ask" },
-              { label: "Send via Brim", value: "brim" },
-              { label: "Copy to clipboard", value: "clipboard" },
-              { label: "Send via Gmail (coming soon)", value: "gmail", disabled: true },
-            ])}
-          />
+          >
+            <s-option value="ask">Always ask</s-option>
+            <s-option value="brim">Send via Brim</s-option>
+            <s-option value="clipboard">Copy to clipboard</s-option>
+            <s-option value="gmail" disabled>Send via Gmail (coming soon)</s-option>
+          </s-select>
         </s-section>
 
         <s-section heading="Reorder thresholds">
-          <s-text-field
+          <s-number-field
             name="critical_stock_threshold"
             label="Critical stock threshold"
-            type="number"
-            min="0"
-            max="1"
-            step="0.05"
+            min={0}
+            max={1}
+            step={0.05}
             value={String(settings?.critical_stock_threshold ?? "0.5")}
             help-text="Fraction of the reorder point at which a critical-low alert fires (e.g. 0.5 = 50%)"
           />
-          <s-text-field
+          <s-number-field
             name="supplier_chase_days"
             label="Chase supplier after (days)"
-            type="number"
-            min="1"
+            min={1}
             value={String(settings?.supplier_chase_days ?? "3")}
             help-text="Days after sending a PO before Brim reminds you to follow up"
           />
-          <s-text-field
+          <s-number-field
             name="delivery_reminder_days_before"
             label="Delivery reminder (days before)"
-            type="number"
-            min="0"
+            min={0}
             value={String(settings?.delivery_reminder_days_before ?? "1")}
             help-text="Days before expected delivery to send a receipt confirmation reminder"
           />

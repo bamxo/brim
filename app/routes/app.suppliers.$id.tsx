@@ -132,14 +132,13 @@ export default function EditSupplier() {
             <s-text-field
               name="phone"
               label="Phone number"
-              type="tel"
               value={supplier.phone ?? ""}
               help-text="Optional — for WhatsApp or clipboard sharing"
             />
             <s-number-field
               name="lead_time_days"
               label="Lead time (days)"
-              min="0"
+              min={0}
               value={supplier.lead_time_days != null ? String(supplier.lead_time_days) : ""}
               help-text="Typical days between placing and receiving an order"
             />

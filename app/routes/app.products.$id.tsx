@@ -169,7 +169,7 @@ export default function ProductDetail() {
             <s-number-field
               name="reorder_point"
               label="Reorder point"
-              min="0"
+              min={0}
               required
               value={rule ? String(rule.reorder_point) : ""}
               help-text="When stock drops to this level, a draft purchase order is created"
@@ -178,7 +178,7 @@ export default function ProductDetail() {
             <s-number-field
               name="reorder_quantity"
               label="Reorder quantity"
-              min="1"
+              min={1}
               required
               value={rule ? String(rule.reorder_quantity) : ""}
               help-text="How many units to order each time"
@@ -187,8 +187,8 @@ export default function ProductDetail() {
             <s-number-field
               name="unit_cost"
               label="Unit cost"
-              min="0"
-              step="0.01"
+              min={0}
+              step={0.01}
               value={rule?.unit_cost != null ? String(rule.unit_cost) : ""}
               help-text="Used to calculate PO total amounts"
             />
@@ -197,16 +197,22 @@ export default function ProductDetail() {
               label="Primary supplier"
               required
               value={rule?.primary_supplier_id ?? ""}
-              options={JSON.stringify(supplierOptions)}
               error={"primary_supplier_id" in errors ? errors.primary_supplier_id : undefined}
-            />
+            >
+              {supplierOptions.map((opt) => (
+                <s-option key={opt.value} value={opt.value}>{opt.label}</s-option>
+              ))}
+            </s-select>
             <s-select
               name="backup_supplier_id"
               label="Backup supplier"
               value={rule?.backup_supplier_id ?? ""}
-              options={JSON.stringify(supplierOptions)}
               help-text="Used if the primary supplier is unavailable"
-            />
+            >
+              {supplierOptions.map((opt) => (
+                <s-option key={opt.value} value={opt.value}>{opt.label}</s-option>
+              ))}
+            </s-select>
           </s-stack>
         </form>
       </s-section>
@@ -219,7 +225,7 @@ export default function ProductDetail() {
           </s-paragraph>
           <form method="post">
             <input type="hidden" name="intent" value="delete-rule" />
-            <s-button tone="critical" submit>
+            <s-button tone="critical" type="submit">
               Disable reorder rule
             </s-button>
           </form>

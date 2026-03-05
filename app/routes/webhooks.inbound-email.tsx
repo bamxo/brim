@@ -150,11 +150,11 @@ function extractDate(text: string): {
   const best = results[0];
   const date = best.start.date();
 
-  const impliedCount = Object.keys(best.start.impliedValues ?? {}).length;
-  const certainCount = Object.keys(best.start.knownValues ?? {}).length;
+  const dateComponents = ["year", "month", "day"] as const;
+  const certainCount = dateComponents.filter((c) => best.start.isCertain(c)).length;
 
   let confidence: DateConfidence = "low";
-  if (certainCount >= 3 && impliedCount === 0) confidence = "high";
+  if (certainCount === 3) confidence = "high";
   else if (certainCount >= 2) confidence = "medium";
 
   return { detectedDate: date, confidence };

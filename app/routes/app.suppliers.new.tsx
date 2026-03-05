@@ -54,7 +54,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 export default function NewSupplier() {
   const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
-  const errors = actionData?.errors ?? {};
+  const errors = (actionData?.errors ?? {}) as Record<string, string | undefined>;
 
   return (
     <s-page heading="Add supplier">
@@ -104,14 +104,13 @@ export default function NewSupplier() {
             <s-text-field
               name="phone"
               label="Phone number"
-              type="tel"
               value=""
               help-text="Optional — for WhatsApp or clipboard sharing"
             />
             <s-number-field
               name="lead_time_days"
               label="Lead time (days)"
-              min="0"
+              min={0}
               value=""
               help-text="Typical days between placing and receiving an order"
             />
