@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { Resend } from "resend";
 import * as chrono from "chrono-node";
-import supabase from "../supabase.server";
+import supabase from "../../db/supabase.server";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -13,18 +13,12 @@ const resend = new Resend(process.env.RESEND_API_KEY);
  *
  * NOTE: Resend's inbound webhook currently provides only email metadata
  * (from, to, subject). The full body text is not included in the payload.
- * As a result, chrono-node date extraction will have no text to parse until
- * Resend adds body content to their inbound payload.
- * When that happens, replace the bodyText fallback below with data.html or
- * data.text from the payload.
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
   const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
 
-  // Read the raw body string first — required for signature verification
   const rawBody = await request.text();
 
-  // Verify the webhook signature if a secret is configured
   if (webhookSecret) {
     try {
       resend.webhooks.verify({
@@ -49,7 +43,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       from: string;
       to: string[];
       subject: string;
-      // body fields not yet provided by Resend inbound webhook
     };
   };
 
@@ -59,7 +52,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const { from, to, subject } = event.data;
 
-  // Resend delivers to[] as plain addresses (no display names)
   const toEmail = to?.[0]?.toLowerCase().trim() ?? null;
   const fromEmail = extractEmail(from) ?? from;
 
@@ -68,7 +60,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return new Response("OK");
   }
 
-  // Look up the PO by reply_to_address
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: po, error } = await (supabase as any)
     .from("purchase_orders")
@@ -81,9 +72,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return new Response("OK");
   }
 
-  // Body text is not available in Resend's current inbound payload.
-  // Use the subject line as a fallback for date extraction; this covers
-  // cases like "Re: PO-20250305-001 — delivery on March 10".
   const bodyText = subject ?? "";
   const { detectedDate, confidence } = extractDate(bodyText);
 
@@ -99,9 +87,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     received_at: new Date().toISOString(),
   });
 
-  const updatePayload: Record<string, unknown> = {
-    status: "supplier_replied",
-  };
+  const updatePayload: Record<string, unknown> = { status: "supplier_replied" };
   if (detectedDate && (confidence === "high" || confidence === "medium")) {
     updatePayload.confirmed_delivery_date = detectedDate.toISOString().slice(0, 10);
   }

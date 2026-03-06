@@ -1,58 +1,7 @@
-import type {
-  ActionFunctionArgs,
-  HeadersFunction,
-  LoaderFunctionArgs,
-} from "react-router";
-import { redirect } from "react-router";
 import { useActionData, useNavigate } from "react-router";
-import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate } from "../shopify.server";
-import { getShopByDomain } from "../lib/shop.server";
-import supabase from "../supabase.server";
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
-  return null;
-};
-
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  const shop = await getShopByDomain(session.shop);
-  const formData = await request.formData();
-
-  const name = String(formData.get("name") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim();
-  const phone = String(formData.get("phone") ?? "").trim() || null;
-  const notes = String(formData.get("notes") ?? "").trim() || null;
-  const leadTimeDays = formData.get("lead_time_days")
-    ? Number(formData.get("lead_time_days"))
-    : null;
-
-  if (!name) return { errors: { name: "Name is required" } };
-  if (!email) return { errors: { email: "Email is required" } };
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .from("suppliers")
-    .insert({
-      shop_id: shop.id,
-      name,
-      email,
-      phone,
-      notes,
-      lead_time_days: leadTimeDays,
-      is_active: true,
-    })
-    .select("id")
-    .single();
-
-  if (error) return { errors: { form: error.message } };
-
-  return redirect(`/app/suppliers/${data.id}`);
-};
-
-export default function NewSupplier() {
-  const actionData = useActionData<typeof action>();
+export default function NewSupplierPage() {
+  const actionData = useActionData<{ errors?: Record<string, string | undefined> }>();
   const navigate = useNavigate();
   const errors = (actionData?.errors ?? {}) as Record<string, string | undefined>;
 
@@ -62,9 +11,7 @@ export default function NewSupplier() {
         slot="primary-action"
         variant="primary"
         onClick={() => {
-          const form = document.getElementById(
-            "supplier-form",
-          ) as HTMLFormElement;
+          const form = document.getElementById("supplier-form") as HTMLFormElement;
           if (form) form.requestSubmit();
         }}
       >
@@ -126,7 +73,3 @@ export default function NewSupplier() {
     </s-page>
   );
 }
-
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};

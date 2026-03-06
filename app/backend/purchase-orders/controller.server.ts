@@ -1,4 +1,4 @@
-import supabase from "../supabase.server";
+import supabase from "../../db/supabase.server";
 
 type ReorderCandidate = {
   product_id: string;
@@ -15,17 +15,10 @@ type ReorderCandidate = {
   shopify_variant_id: string;
 };
 
-/**
- * Generates a PO number in the format PO-YYYYMMDD-NNN (per shop per day).
- */
 async function generatePoNumber(shopId: string): Promise<string> {
   const today = new Date();
-  const datePart = today
-    .toISOString()
-    .slice(0, 10)
-    .replace(/-/g, "");
+  const datePart = today.toISOString().slice(0, 10).replace(/-/g, "");
 
-  // Count existing POs for this shop today to get the next sequence number
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { count } = await (supabase as any)
     .from("purchase_orders")
@@ -37,19 +30,11 @@ async function generatePoNumber(shopId: string): Promise<string> {
   return `PO-${datePart}-${seq}`;
 }
 
-/**
- * Core PO generation logic.
- * Finds all products below their reorder point for a given shop,
- * groups them by supplier, and creates (or appends to) draft POs.
- *
- * Returns the number of new POs created and lines added.
- */
 export async function generateDraftPOs(shopId: string): Promise<{
   posCreated: number;
   linesAdded: number;
   suppressedCount: number;
 }> {
-  // Fetch all active reorder rules with their product stock levels
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: candidates, error: ruleError } = await (supabase as any)
     .from("reorder_rules")
@@ -78,7 +63,6 @@ export async function generateDraftPOs(shopId: string): Promise<{
 
   if (ruleError) throw new Error(`Failed to fetch reorder rules: ${ruleError.message}`);
 
-  // Filter to products below their reorder point
   const triggeredCandidates: ReorderCandidate[] = (candidates ?? [])
     .filter(
       (c: {
@@ -124,7 +108,6 @@ export async function generateDraftPOs(shopId: string): Promise<{
     return { posCreated: 0, linesAdded: 0, suppressedCount: 0 };
   }
 
-  // Fetch shop currency for PO header
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: shopRow } = await (supabase as any)
     .from("shops")
@@ -133,8 +116,6 @@ export async function generateDraftPOs(shopId: string): Promise<{
     .single();
   const currency: string = shopRow?.currency ?? "USD";
 
-  // Check which products already have an open draft or in-transit PO
-  // to avoid creating duplicate orders.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: existingLines } = await (supabase as any)
     .from("purchase_order_line_items")
@@ -151,23 +132,18 @@ export async function generateDraftPOs(shopId: string): Promise<{
     .in("purchase_orders.status", ["draft", "sent", "confirmed", "in_transit"]);
 
   const alreadyOrderedProductIds = new Set<string>(
-    (existingLines ?? []).map(
-      (l: { product_id: string }) => l.product_id,
-    ),
+    (existingLines ?? []).map((l: { product_id: string }) => l.product_id),
   );
 
-  // Separate suppressed (already have open PO) from actionable candidates
   const actionable = triggeredCandidates.filter(
     (c) => !alreadyOrderedProductIds.has(c.product_id),
   );
-  const suppressedCount =
-    triggeredCandidates.length - actionable.length;
+  const suppressedCount = triggeredCandidates.length - actionable.length;
 
   if (actionable.length === 0) {
     return { posCreated: 0, linesAdded: 0, suppressedCount };
   }
 
-  // Group actionable candidates by supplier
   const bySupplier = new Map<string, ReorderCandidate[]>();
   for (const candidate of actionable) {
     const existing = bySupplier.get(candidate.primary_supplier_id) ?? [];
@@ -179,7 +155,6 @@ export async function generateDraftPOs(shopId: string): Promise<{
   let linesAdded = 0;
 
   for (const [supplierId, lines] of bySupplier) {
-    // Check for an existing draft PO for this supplier today that we can append to
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: existingDraft } = await (supabase as any)
       .from("purchase_orders")
@@ -216,7 +191,6 @@ export async function generateDraftPOs(shopId: string): Promise<{
       posCreated++;
     }
 
-    // Insert line items
     const lineItems = lines.map((c) => ({
       purchase_order_id: poId,
       product_id: c.product_id,
@@ -226,8 +200,7 @@ export async function generateDraftPOs(shopId: string): Promise<{
       variant_title: c.variant_title,
       quantity_ordered: c.reorder_quantity,
       unit_cost: c.unit_cost,
-      line_total:
-        c.unit_cost != null ? c.unit_cost * c.reorder_quantity : null,
+      line_total: c.unit_cost != null ? c.unit_cost * c.reorder_quantity : null,
       status: "pending",
     }));
 
@@ -239,11 +212,7 @@ export async function generateDraftPOs(shopId: string): Promise<{
     if (lineError) throw new Error(`Failed to insert PO lines: ${lineError.message}`);
     linesAdded += lineItems.length;
 
-    // Recalculate PO total
-    const newTotal = lineItems.reduce(
-      (sum, l) => sum + (l.line_total ?? 0),
-      0,
-    );
+    const newTotal = lineItems.reduce((sum, l) => sum + (l.line_total ?? 0), 0);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any)
       .from("purchase_orders")
@@ -254,7 +223,6 @@ export async function generateDraftPOs(shopId: string): Promise<{
       })
       .eq("id", poId);
 
-    // Log each trigger
     const triggerLogs = lines.map((c) => ({
       shop_id: shopId,
       product_id: c.product_id,
@@ -269,7 +237,6 @@ export async function generateDraftPOs(shopId: string): Promise<{
     await (supabase as any).from("inventory_trigger_log").insert(triggerLogs);
   }
 
-  // Log suppressed products
   if (suppressedCount > 0) {
     const suppressedLogs = triggeredCandidates
       .filter((c) => alreadyOrderedProductIds.has(c.product_id))
@@ -289,10 +256,6 @@ export async function generateDraftPOs(shopId: string): Promise<{
   return { posCreated, linesAdded, suppressedCount };
 }
 
-/**
- * Triggered per-product when an inventory_levels/update webhook fires.
- * Only generates a PO if this specific product's stock crossed its threshold.
- */
 export async function checkAndTriggerReorder(
   shopId: string,
   shopifyInventoryItemId: string,
@@ -322,7 +285,6 @@ export async function checkAndTriggerReorder(
   const wasAbove = product.current_stock > rule.reorder_point;
   const isNowAtOrBelow = newStock <= rule.reorder_point;
 
-  // Only fire if we just crossed the threshold (edge trigger, not level trigger)
   if (wasAbove && isNowAtOrBelow) {
     await generateDraftPOs(shopId);
   }

@@ -26,11 +26,6 @@ type SendPOEmailOptions = {
   shopName: string;
 };
 
-/**
- * Generates a unique reply-to address for a PO.
- * Supplier replies to this address are routed via Resend's inbound routing
- * to our /webhooks/inbound-email endpoint.
- */
 export function getReplyToAddress(poId: string): string {
   return `po-${poId}@${INBOUND_DOMAIN}`;
 }
@@ -102,10 +97,6 @@ function buildPoEmailHtml(opts: SendPOEmailOptions): string {
 </html>`;
 }
 
-/**
- * Sends a PO email to the supplier via Resend.
- * Returns the Resend message ID on success.
- */
 export async function sendPOEmail(opts: SendPOEmailOptions): Promise<string> {
   const replyTo = getReplyToAddress(opts.poId);
 
@@ -119,6 +110,5 @@ export async function sendPOEmail(opts: SendPOEmailOptions): Promise<string> {
 
   if (error) throw new Error(`Resend error: ${error.message}`);
 
-  // Persist the reply-to address so we can match inbound replies
   return data?.id ?? "";
 }

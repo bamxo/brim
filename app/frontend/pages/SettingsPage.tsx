@@ -1,56 +1,19 @@
-import type {
-  ActionFunctionArgs,
-  HeadersFunction,
-  LoaderFunctionArgs,
-} from "react-router";
 import { useActionData, useLoaderData, useSubmit } from "react-router";
-import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate } from "../shopify.server";
-import { getShopByDomain } from "../lib/shop.server";
-import supabase from "../supabase.server";
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  const shop = await getShopByDomain(session.shop);
+type Settings = {
+  notification_channel: string | null;
+  default_send_method: string | null;
+  critical_stock_threshold: number | null;
+  supplier_chase_days: number | null;
+  delivery_reminder_days_before: number | null;
+} | null;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: settings } = await (supabase as any)
-    .from("shop_settings")
-    .select("*")
-    .eq("shop_id", shop.id)
-    .single();
+type LoaderData = { settings: Settings };
+type ActionData = { success?: boolean; error?: string | null };
 
-  return { settings };
-};
-
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  const shop = await getShopByDomain(session.shop);
-  const formData = await request.formData();
-
-  const payload = {
-    shop_id: shop.id,
-    notification_channel: formData.get("notification_channel"),
-    default_send_method: formData.get("default_send_method"),
-    critical_stock_threshold: Number(formData.get("critical_stock_threshold")),
-    supplier_chase_days: Number(formData.get("supplier_chase_days")),
-    delivery_reminder_days_before: Number(
-      formData.get("delivery_reminder_days_before"),
-    ),
-  };
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
-    .from("shop_settings")
-    .upsert(payload, { onConflict: "shop_id" });
-
-  if (error) return { success: false, error: error.message };
-  return { success: true, error: null };
-};
-
-export default function Settings() {
-  const { settings } = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
+export default function SettingsPage() {
+  const { settings } = useLoaderData<LoaderData>();
+  const actionData = useActionData<ActionData>();
   const submit = useSubmit();
 
   const handleSave = () => {
@@ -128,7 +91,3 @@ export default function Settings() {
     </s-page>
   );
 }
-
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};

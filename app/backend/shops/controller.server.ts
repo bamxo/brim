@@ -1,5 +1,5 @@
 import type { Session } from "@shopify/shopify-api";
-import supabase from "../supabase.server";
+import supabase from "../../db/supabase.server";
 
 export type Shop = {
   id: string;
@@ -15,10 +15,6 @@ export type Shop = {
   created_at: string;
 };
 
-/**
- * Upserts the shop row on every authenticated request.
- * Returns the Supabase shop UUID used to scope all business queries.
- */
 export async function upsertShop(session: Session): Promise<Shop> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
@@ -33,8 +29,6 @@ export async function upsertShop(session: Session): Promise<Shop> {
       },
       {
         onConflict: "shopify_domain",
-        // Only update the token and active status on re-install;
-        // preserve existing shop_name, email, currency, timezone.
         ignoreDuplicates: false,
       },
     )
@@ -45,10 +39,6 @@ export async function upsertShop(session: Session): Promise<Shop> {
   return data as Shop;
 }
 
-/**
- * Looks up the shop UUID by Shopify domain.
- * Use this in loaders/actions where you already have the session.
- */
 export async function getShopByDomain(shopDomain: string): Promise<Shop> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
@@ -61,10 +51,6 @@ export async function getShopByDomain(shopDomain: string): Promise<Shop> {
   return data as Shop;
 }
 
-/**
- * Marks the shop as inactive on uninstall.
- * The access token is cleared so background jobs skip this shop.
- */
 export async function deactivateShop(shopDomain: string): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)

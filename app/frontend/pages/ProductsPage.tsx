@@ -1,34 +1,4 @@
-import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useNavigate } from "react-router";
-import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate } from "../shopify.server";
-import { getShopByDomain } from "../lib/shop.server";
-import supabase from "../supabase.server";
-
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  const shop = await getShopByDomain(session.shop);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: products, error } = await (supabase as any)
-    .from("products")
-    .select(
-      `
-      id, title, variant_title, sku, current_stock,
-      reorder_rules (
-        id, reorder_point, reorder_quantity, is_active,
-        primary_supplier:suppliers!primary_supplier_id (name)
-      )
-    `,
-    )
-    .eq("shop_id", shop.id)
-    .eq("is_active", true)
-    .order("title");
-
-  if (error) throw new Error(error.message);
-
-  return { products: products ?? [] };
-};
 
 type ReorderRule = {
   id: string;
@@ -47,8 +17,10 @@ type Product = {
   reorder_rules: ReorderRule[];
 };
 
-export default function Products() {
-  const { products } = useLoaderData<typeof loader>();
+type LoaderData = { products: Product[] };
+
+export default function ProductsPage() {
+  const { products } = useLoaderData<LoaderData>();
   const navigate = useNavigate();
 
   return (
@@ -85,7 +57,7 @@ export default function Products() {
               <s-table-header>Supplier</s-table-header>
             </s-table-header-row>
             <s-table-body>
-              {products.map((product: Product) => {
+              {products.map((product) => {
                 const rule = product.reorder_rules?.[0];
                 const isLow = rule && product.current_stock <= rule.reorder_point;
                 return (
@@ -94,7 +66,10 @@ export default function Products() {
                     clickDelegate={`product-link-${product.id}`}
                   >
                     <s-table-cell>
-                      <s-link id={`product-link-${product.id}`} href={`/app/products/${product.id}`}>
+                      <s-link
+                        id={`product-link-${product.id}`}
+                        href={`/app/products/${product.id}`}
+                      >
                         {product.title}
                         {product.variant_title ? ` — ${product.variant_title}` : ""}
                       </s-link>
@@ -121,7 +96,3 @@ export default function Products() {
     </s-page>
   );
 }
-
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};

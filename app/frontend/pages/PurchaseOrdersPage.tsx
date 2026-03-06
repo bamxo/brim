@@ -1,9 +1,4 @@
-import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useNavigate } from "react-router";
-import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate } from "../shopify.server";
-import { getShopByDomain } from "../lib/shop.server";
-import supabase from "../supabase.server";
 
 type BadgeTone =
   | "auto"
@@ -42,30 +37,6 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  const shop = await getShopByDomain(session.shop);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: purchaseOrders, error } = await (supabase as any)
-    .from("purchase_orders")
-    .select(
-      `
-      id, po_number, status, is_urgent,
-      total_amount, currency, created_at,
-      confirmed_delivery_date,
-      suppliers (name)
-    `,
-    )
-    .eq("shop_id", shop.id)
-    .not("status", "eq", "cancelled")
-    .order("created_at", { ascending: false });
-
-  if (error) throw new Error(error.message);
-
-  return { purchaseOrders: purchaseOrders ?? [] };
-};
-
 type PurchaseOrder = {
   id: string;
   po_number: string;
@@ -78,8 +49,10 @@ type PurchaseOrder = {
   suppliers: { name: string } | null;
 };
 
-export default function PurchaseOrders() {
-  const { purchaseOrders } = useLoaderData<typeof loader>();
+type LoaderData = { purchaseOrders: PurchaseOrder[] };
+
+export default function PurchaseOrdersPage() {
+  const { purchaseOrders } = useLoaderData<LoaderData>();
   const navigate = useNavigate();
 
   return (
@@ -110,13 +83,16 @@ export default function PurchaseOrders() {
               <s-table-header>Created</s-table-header>
             </s-table-header-row>
             <s-table-body>
-              {purchaseOrders.map((po: PurchaseOrder) => (
+              {purchaseOrders.map((po) => (
                 <s-table-row
                   key={po.id}
                   clickDelegate={`po-link-${po.id}`}
                 >
                   <s-table-cell>
-                    <s-link id={`po-link-${po.id}`} href={`/app/purchase-orders/${po.id}`}>
+                    <s-link
+                      id={`po-link-${po.id}`}
+                      href={`/app/purchase-orders/${po.id}`}
+                    >
                       {po.is_urgent ? "🔴 " : ""}
                       {po.po_number}
                     </s-link>
@@ -150,7 +126,3 @@ export default function PurchaseOrders() {
     </s-page>
   );
 }
-
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};

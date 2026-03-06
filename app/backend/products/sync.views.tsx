@@ -4,11 +4,10 @@ import type {
   LoaderFunctionArgs,
 } from "react-router";
 import { redirect } from "react-router";
-import { useActionData, useNavigation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate } from "../shopify.server";
-import { getShopByDomain } from "../lib/shop.server";
-import supabase from "../supabase.server";
+import { authenticate } from "../../shopify.server";
+import { getShopByDomain } from "../shops/controller.server";
+import { upsertProducts } from "./controller.server";
 
 const PRODUCTS_QUERY = `#graphql
   query GetProducts($cursor: String) {
@@ -46,9 +45,7 @@ type ShopifyVariant = {
   sku: string | null;
   inventoryItem: {
     id: string;
-    inventoryLevels: {
-      nodes: Array<{ available: number }>;
-    };
+    inventoryLevels: { nodes: Array<{ available: number }> };
   };
 };
 
@@ -92,17 +89,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     if (!productsPage) break;
 
-    for (const product of productsPage.nodes as ShopifyProduct[]) {
+    for (const product of productsPage.nodes) {
       const shopifyProductId = gidToId(product.id);
 
       for (const variant of product.variants.nodes) {
         const shopifyVariantId = gidToId(variant.id);
         const shopifyInventoryItemId = gidToId(variant.inventoryItem.id);
-        const stock =
-          variant.inventoryItem.inventoryLevels.nodes.reduce(
-            (sum: number, lvl: { available: number }) => sum + (lvl.available ?? 0),
-            0,
-          );
+        const stock = variant.inventoryItem.inventoryLevels.nodes.reduce(
+          (sum: number, lvl: { available: number }) => sum + (lvl.available ?? 0),
+          0,
+        );
 
         rows.push({
           shop_id: shop.id,
@@ -127,54 +123,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return { synced: 0, error: "No products found in this store." };
   }
 
-  // Upsert in batches of 100 to stay within Supabase payload limits
-  const BATCH = 100;
-  for (let i = 0; i < rows.length; i += BATCH) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
-      .from("products")
-      .upsert(rows.slice(i, i + BATCH), {
-        onConflict: "shop_id,shopify_variant_id",
-      });
-
-    if (error) return { synced: 0, error: error.message };
-  }
+  const { error } = await upsertProducts(shop.id, rows);
+  if (error) return { synced: 0, error };
 
   return redirect(`/app/products?synced=${rows.length}`);
 };
 
-export default function ProductsSync() {
-  const actionData = useActionData<typeof action>();
-  const navigation = useNavigation();
-  const isSyncing = navigation.state === "submitting";
-
-  return (
-    <s-page heading="Sync products from Shopify">
-      {actionData?.error && (
-        <s-banner tone="critical" heading="Sync failed">
-          <s-paragraph>{actionData.error}</s-paragraph>
-        </s-banner>
-      )}
-
-      <s-section>
-        <s-paragraph>
-          This will import all products and variants from your Shopify store
-          into Brim. Existing products will be updated with current stock
-          levels. This may take a moment for large catalogues.
-        </s-paragraph>
-        <form method="post">
-          <s-button
-            variant="primary"
-            type="submit"
-            {...(isSyncing ? { loading: true } : {})}
-          >
-            {isSyncing ? "Syncing…" : "Start sync"}
-          </s-button>
-        </form>
-      </s-section>
-    </s-page>
-  );
-}
+export { default } from "../../frontend/pages/ProductsSyncPage";
 
 export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);

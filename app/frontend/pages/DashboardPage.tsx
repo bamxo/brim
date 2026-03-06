@@ -1,18 +1,9 @@
-import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useNavigate } from "react-router";
-import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate } from "../shopify.server";
-import { getShopByDomain } from "../lib/shop.server";
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  const shop = await getShopByDomain(session.shop);
+type LoaderData = { shopName: string };
 
-  return { shopName: shop.shop_name ?? session.shop };
-};
-
-export default function Dashboard() {
-  const { shopName } = useLoaderData<typeof loader>();
+export default function DashboardPage() {
+  const { shopName } = useLoaderData<LoaderData>();
   const navigate = useNavigate();
 
   return (
@@ -57,7 +48,3 @@ export default function Dashboard() {
     </s-page>
   );
 }
-
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};

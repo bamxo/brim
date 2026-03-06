@@ -1,26 +1,4 @@
-import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useNavigate } from "react-router";
-import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate } from "../shopify.server";
-import { getShopByDomain } from "../lib/shop.server";
-import supabase from "../supabase.server";
-
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  const shop = await getShopByDomain(session.shop);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: suppliers, error } = await (supabase as any)
-    .from("suppliers")
-    .select("id, name, email, phone, lead_time_days, is_active")
-    .eq("shop_id", shop.id)
-    .eq("is_active", true)
-    .order("name");
-
-  if (error) throw new Error(error.message);
-
-  return { suppliers: suppliers ?? [] };
-};
 
 type Supplier = {
   id: string;
@@ -31,8 +9,10 @@ type Supplier = {
   is_active: boolean;
 };
 
-export default function Suppliers() {
-  const { suppliers } = useLoaderData<typeof loader>();
+type LoaderData = { suppliers: Supplier[] };
+
+export default function SuppliersPage() {
+  const { suppliers } = useLoaderData<LoaderData>();
   const navigate = useNavigate();
 
   return (
@@ -67,13 +47,16 @@ export default function Suppliers() {
               <s-table-header>Lead time</s-table-header>
             </s-table-header-row>
             <s-table-body>
-              {suppliers.map((supplier: Supplier) => (
+              {suppliers.map((supplier) => (
                 <s-table-row
                   key={supplier.id}
                   clickDelegate={`supplier-link-${supplier.id}`}
                 >
                   <s-table-cell>
-                    <s-link id={`supplier-link-${supplier.id}`} href={`/app/suppliers/${supplier.id}`}>
+                    <s-link
+                      id={`supplier-link-${supplier.id}`}
+                      href={`/app/suppliers/${supplier.id}`}
+                    >
                       {supplier.name}
                     </s-link>
                   </s-table-cell>
@@ -93,7 +76,3 @@ export default function Suppliers() {
     </s-page>
   );
 }
-
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};
