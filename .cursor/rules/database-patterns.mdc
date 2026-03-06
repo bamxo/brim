@@ -1,0 +1,88 @@
+---
+description: Supabase query patterns and data model conventions for this app
+globs: app/backend/**/*.ts
+alwaysApply: false
+---
+
+# Database Patterns
+
+## Data model — how things are linked
+
+| Concept | Table | Key columns |
+|---------|-------|-------------|
+| Product ↔ Supplier assignment | `reorder_rules` | `product_id`, `primary_supplier_id` |
+| Active assignment | `reorder_rules` | `is_active = true` |
+| Remove assignment | `reorder_rules` | set `is_active = false` |
+
+Products and suppliers are **never directly linked**. The join is always through `reorder_rules`.
+
+## Never upsert with onConflict unless the constraint is verified in prod
+
+The remote Supabase instance may not have all migrations applied.
+`upsert(..., { onConflict: "shop_id,product_id" })` throws a Postgres error
+if the unique constraint doesn't exist. Always use check-then-insert/update:
+
+```ts
+// ✅ CORRECT — works regardless of whether the unique constraint exists
+const { data: existing } = await supabase
+  .from("reorder_rules")
+  .select("id")
+  .eq("shop_id", shopId)
+  .eq("product_id", productId)
+  .maybeSingle();
+
+if (existing?.id) {
+  await supabase.from("reorder_rules").update(payload).eq("id", existing.id);
+} else {
+  await supabase.from("reorder_rules").insert(payload);
+}
+
+// ❌ WRONG — crashes when unique constraint is missing in prod
+await supabase.from("reorder_rules").upsert(payload, { onConflict: "shop_id,product_id" });
+```
+
+## Always return { error } from mutation functions
+
+```ts
+// ✅ CORRECT
+export async function deactivateReorderRule(...) {
+  const { error } = await supabase.from(...).update(...);
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
+// ❌ WRONG — caller can't tell if the operation failed
+export async function deactivateReorderRule(...) {
+  await supabase.from(...).update(...); // fire-and-forget
+}
+```
+
+## Hard delete — nullify FKs first
+
+Before deleting a supplier (or any record referenced by FKs):
+1. Null out `reorder_rules.primary_supplier_id`
+2. Null out `reorder_rules.backup_supplier_id`
+3. Null out `purchase_orders.supplier_id`
+4. Then delete the supplier row
+
+This preserves historical PO data while allowing the delete to succeed.
+
+## Shopify product sync — query cost limit is 1000
+
+`products(first: 250, variants(first: 100, inventoryLevels(first: 5)))` costs ~1047.
+Stay under 1000:
+
+```graphql
+# ✅ CORRECT
+products(first: 50) {          # paginate more pages instead
+  variants(first: 10) {
+    inventoryItem {
+      inventoryLevels(first: 3) {
+        quantities(names: ["available"]) { name quantity }
+      }
+    }
+  }
+}
+```
+
+`InventoryLevel.available` was removed in API version 2025-10. Use `quantities(names: ["available"])`.

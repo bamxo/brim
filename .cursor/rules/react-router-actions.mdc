@@ -1,0 +1,63 @@
+---
+description: React Router action/fetcher patterns for this app
+globs: app/**/*.tsx
+alwaysApply: false
+---
+
+# React Router Actions & Fetchers
+
+## One fetcher per mutation concern
+
+A single route action often handles multiple intents. Use a **separate `useFetcher`**
+for each concern so responses, errors, and loading states don't bleed into each other.
+
+```tsx
+// ✅ CORRECT — isolated feedback per concern
+const syncFetcher = useFetcher<ActionData>();      // sync products
+const productFetcher = useFetcher<ActionData>();   // add / remove products
+const submit = useSubmit();                         // save supplier info
+
+// ❌ WRONG — add-product "success" fires the save-supplier banner
+const handleAddProduct = (id: string) => {
+  submit(fd, { method: "post" });  // shares useActionData() with save
+};
+```
+
+## Success banners — use object reference as effect dependency
+
+```tsx
+// ✅ CORRECT — re-fires on every submission even when value stays true
+useEffect(() => {
+  if (actionData?.success) {
+    setSavedOk(true);
+    const t = setTimeout(() => setSavedOk(false), 4000);
+    return () => clearTimeout(t);
+  }
+}, [actionData]); // the object reference changes each submission
+
+// ❌ WRONG — second save never re-triggers the banner
+}, [actionData?.success]);
+```
+
+## Return distinct keys per intent
+
+```ts
+// ✅ CORRECT — each intent has its own response shape
+if (intent === "add-product") return { productOk: true };
+if (intent === "sync-products") return { syncResult: { synced, error } };
+return { success: true }; // save supplier
+
+// ❌ WRONG — every intent returns { success: true }, errors are invisible
+return { success: true };
+```
+
+## Sync in-place — never navigate when staying on the page
+
+```tsx
+// ✅ CORRECT — stays on supplier detail page
+syncFetcher.submit(fd, { method: "post" });
+// action returns { syncResult: { synced, error } }
+
+// ❌ WRONG — navigates away to /app/products
+submit(fd, { method: "post", action: "/app/products/sync" });
+```
