@@ -129,6 +129,18 @@ export async function deactivateReorderRule(shopId: string, productId: string | 
   return { error: null };
 }
 
+export async function deleteReorderRule(shopId: string, productId: string | undefined) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("reorder_rules")
+    .delete()
+    .eq("product_id", productId)
+    .eq("shop_id", shopId);
+
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
 export async function getAllProductsForShop(shopId: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)

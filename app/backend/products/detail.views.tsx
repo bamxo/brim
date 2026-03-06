@@ -10,7 +10,7 @@ import {
   getProductById,
   getReorderRuleForProduct,
   upsertReorderRule,
-  deactivateReorderRule,
+  deleteReorderRule,
 } from "./controller.server";
 import { getActiveSuppliersMinimal } from "../suppliers/controller.server";
 
@@ -33,15 +33,15 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
 
-  if (intent === "delete-rule") {
-    await deactivateReorderRule(shop.id, params.id);
+  if (intent === "clear-rule") {
+    const { error } = await deleteReorderRule(shop.id, params.id);
+    if (error) return { errors: { form: error }, success: false };
     return { success: true, deleted: true, errors: {} };
   }
 
   const reorderPoint = Number(formData.get("reorder_point"));
   const reorderQuantity = Number(formData.get("reorder_quantity"));
   const primarySupplierId = formData.get("primary_supplier_id") as string | null;
-  const backupSupplierId = (formData.get("backup_supplier_id") as string) || null;
   const unitCost = formData.get("unit_cost") ? Number(formData.get("unit_cost")) : null;
 
   if (!reorderPoint || reorderPoint < 0)
@@ -55,7 +55,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     shop_id: shop.id,
     product_id: params.id,
     primary_supplier_id: primarySupplierId,
-    backup_supplier_id: backupSupplierId,
+    backup_supplier_id: null,
     reorder_point: reorderPoint,
     reorder_quantity: reorderQuantity,
     unit_cost: unitCost,
