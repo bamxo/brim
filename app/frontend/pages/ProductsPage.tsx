@@ -14,6 +14,7 @@ type Product = {
   variant_title: string | null;
   sku: string | null;
   current_stock: number;
+  image_url: string | null;
   reorder_rules: ReorderRule[];
 };
 
@@ -35,10 +36,16 @@ export default function ProductsPage() {
 
       {products.length === 0 ? (
         <s-section heading="No products synced yet">
-          <s-paragraph>
-            Sync your Shopify products to configure reorder rules and automate
-            purchase orders.
-          </s-paragraph>
+          <s-banner
+            tone="info"
+            heading="Import your Shopify inventory to get started"
+          >
+            <s-paragraph>
+              Syncing pulls your products and current stock levels from Shopify.
+              Once synced, you can configure reorder points and assign suppliers
+              to automate purchase orders.
+            </s-paragraph>
+          </s-banner>
           <s-button
             variant="primary"
             onClick={() => navigate("/app/products/sync")}
@@ -50,6 +57,7 @@ export default function ProductsPage() {
         <s-section>
           <s-table>
             <s-table-header-row>
+              <s-table-header></s-table-header>
               <s-table-header>Product</s-table-header>
               <s-table-header>SKU</s-table-header>
               <s-table-header>Stock</s-table-header>
@@ -65,6 +73,13 @@ export default function ProductsPage() {
                     key={product.id}
                     clickDelegate={`product-link-${product.id}`}
                   >
+                    <s-table-cell>
+                      <s-thumbnail
+                        src={product.image_url ?? undefined}
+                        alt={product.title}
+                        size="small"
+                      />
+                    </s-table-cell>
                     <s-table-cell>
                       <s-link
                         id={`product-link-${product.id}`}

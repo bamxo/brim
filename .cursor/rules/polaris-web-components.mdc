@@ -1,0 +1,64 @@
+---
+description: Rules for using Shopify Polaris web components (s-*) in this app
+globs: app/frontend/**/*.tsx
+alwaysApply: false
+---
+
+# Polaris Web Components (App Home)
+
+## FormData — NEVER use native form submission
+
+`s-text-field`, `s-email-field`, `s-number-field`, `s-text-area` are NOT form-associated.
+`new FormData(form)` collects zero values. Always harvest manually:
+
+```tsx
+// ✅ CORRECT
+const get = (name: string) =>
+  (form.querySelector(`[name="${name}"]`) as HTMLElement & { value: string })?.value ?? "";
+const fd = new FormData();
+fd.append("name", get("name"));
+submit(fd, { method: "post" });
+
+// ❌ WRONG — sends empty strings
+submit(form);
+// ❌ WRONG — does not trigger React Router
+form.requestSubmit();
+```
+
+## s-section slots — App Home only has `children`
+
+App Home `s-section` has NO `primary-action` or `secondary-actions` slots.
+Those slots only exist in Customer Account / POS extensions.
+Put buttons inside the section body using a flex div instead:
+
+```tsx
+// ✅ CORRECT
+<s-section heading="Product catalog">
+  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+    <s-button variant="primary" onClick={handleSync}>Sync</s-button>
+  </div>
+</s-section>
+
+// ❌ WRONG — button is silently dropped
+<s-section heading="Product catalog">
+  <s-button slot="primary-action">Sync</s-button>
+</s-section>
+```
+
+## Valid prop values (common mistakes)
+
+| Component | ❌ Invalid | ✅ Valid |
+|-----------|-----------|---------|
+| `s-banner` | `tone="caution"` | `tone="warning"` |
+| `s-text` | `tone="subdued"` | no tone prop; use `style` |
+| `s-stack` | `align="center"` | no align prop; use flex div |
+| `s-button` | `size="slim"` | use `variant` only |
+| `s-button` | `icon="refresh"` string variant | pass icon name; variant is separate |
+
+## Icon buttons
+
+```tsx
+<s-button icon="refresh" variant="primary" onClick={handleSync}>
+  Sync products
+</s-button>
+```

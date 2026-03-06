@@ -27,9 +27,16 @@ export default function SuppliersPage() {
 
       {suppliers.length === 0 ? (
         <s-section heading="No suppliers yet">
-          <s-paragraph>
-            Add your first supplier to start creating purchase orders.
-          </s-paragraph>
+          <s-banner
+            tone="info"
+            heading="Add your first supplier to unlock purchase order automation"
+          >
+            <s-paragraph>
+              Suppliers are linked to your products. When a product drops below
+              its reorder point, Brim creates a draft purchase order and routes
+              it to the right supplier automatically.
+            </s-paragraph>
+          </s-banner>
           <s-button
             variant="primary"
             onClick={() => navigate("/app/suppliers/new")}

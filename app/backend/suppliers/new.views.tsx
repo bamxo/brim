@@ -23,9 +23,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const email = String(formData.get("email") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
-  const leadTimeDays = formData.get("lead_time_days")
-    ? Number(formData.get("lead_time_days"))
-    : null;
 
   if (!name) return { errors: { name: "Name is required" } };
   if (!email) return { errors: { email: "Email is required" } };
@@ -35,7 +32,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     email,
     phone,
     notes,
-    lead_time_days: leadTimeDays,
   });
 
   if (error) return { errors: { form: error } };

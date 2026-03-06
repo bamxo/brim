@@ -89,13 +89,17 @@ export default function PurchaseOrdersPage() {
                   clickDelegate={`po-link-${po.id}`}
                 >
                   <s-table-cell>
-                    <s-link
-                      id={`po-link-${po.id}`}
-                      href={`/app/purchase-orders/${po.id}`}
-                    >
-                      {po.is_urgent ? "🔴 " : ""}
-                      {po.po_number}
-                    </s-link>
+                    <s-stack direction="inline" gap="small">
+                      {po.is_urgent && (
+                        <s-badge tone="critical">Urgent</s-badge>
+                      )}
+                      <s-link
+                        id={`po-link-${po.id}`}
+                        href={`/app/purchase-orders/${po.id}`}
+                      >
+                        {po.po_number}
+                      </s-link>
+                    </s-stack>
                   </s-table-cell>
                   <s-table-cell>{po.suppliers?.name ?? "—"}</s-table-cell>
                   <s-table-cell>

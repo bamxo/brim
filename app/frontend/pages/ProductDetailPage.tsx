@@ -1,4 +1,4 @@
-import { useActionData, useLoaderData, useNavigate } from "react-router";
+import { useActionData, useLoaderData, useNavigate, useSubmit } from "react-router";
 
 type Supplier = { id: string; name: string };
 
@@ -9,6 +9,7 @@ type LoaderData = {
     variant_title: string | null;
     sku: string | null;
     current_stock: number;
+    image_url: string | null;
     last_synced_at: string | null;
   };
   rule: {
@@ -32,6 +33,7 @@ export default function ProductDetailPage() {
   const { product, rule, suppliers } = useLoaderData<LoaderData>();
   const actionData = useActionData<ActionData>();
   const navigate = useNavigate();
+  const submit = useSubmit();
   const errors = actionData?.errors ?? {};
 
   const supplierOptions = [
@@ -49,7 +51,7 @@ export default function ProductDetailPage() {
         variant="primary"
         onClick={() => {
           const form = document.getElementById("rule-form") as HTMLFormElement;
-          if (form) form.requestSubmit();
+          if (form) submit(form);
         }}
       >
         Save rule
@@ -71,6 +73,11 @@ export default function ProductDetailPage() {
       )}
 
       <s-section heading="Product info" slot="aside">
+        <s-thumbnail
+          src={product.image_url ?? undefined}
+          alt={product.title}
+          size="large"
+        />
         <s-paragraph>
           <s-text>Variant: </s-text>
           <s-text>{product.variant_title ?? "Default"}</s-text>
