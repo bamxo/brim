@@ -23,6 +23,8 @@ export default [
   route("webhooks/app/uninstalled",          "backend/webhooks/app-uninstalled.ts"),
   route("webhooks/app/scopes_update",        "backend/webhooks/app-scopes-update.ts"),
   route("webhooks/inventory-levels/update",  "backend/webhooks/inventory-levels.ts"),
+  route("webhooks/products/create",          "backend/webhooks/products-create.ts"),
+  route("webhooks/products/delete",          "backend/webhooks/products-delete.ts"),
   route("webhooks/inbound-email",            "backend/webhooks/inbound-email.ts"),
 
   // ── Auth (Shopify OAuth — keep as-is) ──────────────────────────────────

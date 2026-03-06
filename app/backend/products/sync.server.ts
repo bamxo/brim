@@ -1,4 +1,4 @@
-import { upsertProducts } from "./controller.server";
+import { upsertProducts, deactivateDeletedProducts } from "./controller.server";
 
 // 50 products per page keeps each request well under Shopify's 1000 query-cost limit.
 const PRODUCTS_QUERY = `#graphql
@@ -74,6 +74,7 @@ function gidToId(gid: string): string {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function syncProductsForShop(admin: any, shopId: string) {
   const rows: Record<string, unknown>[] = [];
+  const seenProductIds = new Set<string>();
   let cursor: string | null = null;
   let hasNextPage = true;
 
@@ -87,6 +88,7 @@ export async function syncProductsForShop(admin: any, shopId: string) {
 
     for (const product of productsPage.nodes) {
       const shopifyProductId = gidToId(product.id);
+      seenProductIds.add(shopifyProductId);
       for (const variant of product.variants.nodes) {
         const shopifyVariantId = gidToId(variant.id);
         const shopifyInventoryItemId = gidToId(variant.inventoryItem.id);
@@ -121,6 +123,10 @@ export async function syncProductsForShop(admin: any, shopId: string) {
 
   const { error } = await upsertProducts(shopId, rows);
   if (error) return { synced: 0, error };
+
+  // Soft-delete any products that are in the DB but no longer exist in Shopify
+  const { error: deleteError } = await deactivateDeletedProducts(shopId, [...seenProductIds]);
+  if (deleteError) console.error("Failed to deactivate deleted products:", deleteError);
 
   return { synced: rows.length, error: null };
 }

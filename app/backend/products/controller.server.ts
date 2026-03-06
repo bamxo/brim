@@ -197,6 +197,47 @@ export async function getLastSyncedAt(shopId: string): Promise<string | null> {
   return (data?.last_synced_at as string | null) ?? null;
 }
 
+export async function deactivateDeletedProducts(
+  shopId: string,
+  activeShopifyProductIds: string[],
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: dbProducts, error } = await (supabase as any)
+    .from("products")
+    .select("id, shopify_product_id")
+    .eq("shop_id", shopId)
+    .eq("is_active", true);
+
+  if (error) return { error: error.message };
+  if (!dbProducts?.length) return { error: null };
+
+  const activeSet = new Set(activeShopifyProductIds);
+  const toDeactivate = (dbProducts as { id: string; shopify_product_id: string }[])
+    .filter((p) => !activeSet.has(p.shopify_product_id))
+    .map((p) => p.id);
+
+  if (!toDeactivate.length) return { error: null };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: rulesError } = await (supabase as any)
+    .from("reorder_rules")
+    .update({ is_active: false })
+    .eq("shop_id", shopId)
+    .in("product_id", toDeactivate);
+
+  if (rulesError) return { error: rulesError.message };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: productsError } = await (supabase as any)
+    .from("products")
+    .update({ is_active: false })
+    .eq("shop_id", shopId)
+    .in("id", toDeactivate);
+
+  if (productsError) return { error: productsError.message };
+  return { error: null };
+}
+
 export async function upsertProducts(
   shopId: string,
   rows: Record<string, unknown>[],
