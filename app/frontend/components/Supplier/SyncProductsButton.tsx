@@ -55,18 +55,18 @@ export default function SyncProductsButton({ lastSyncedAt, action }: Props) {
         .brim-spin { animation: brim-spin 0.8s linear infinite; display: inline-block; }
       `}</style>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-        <span style={{ fontSize: 12, color: "#6d7175" }}>
-          {displayedSyncedAt
-            ? `Last synced ${formatSyncDate(displayedSyncedAt)}`
-            : "Not yet synced"}
-        </span>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
         <s-button variant="primary" onClick={handleSync} disabled={isSyncing}>
           <span className={isSyncing ? "brim-spin" : ""} style={{ marginRight: 6 }}>
             ↻
           </span>
           {isSyncing ? "Syncing…" : "Sync products"}
         </s-button>
+        <span style={{ fontSize: 12, color: "#6d7175" }}>
+          {displayedSyncedAt
+            ? `Last synced ${formatSyncDate(displayedSyncedAt)}`
+            : "Not yet synced"}
+        </span>
       </div>
 
       {fetcher.data?.syncResult?.error && (

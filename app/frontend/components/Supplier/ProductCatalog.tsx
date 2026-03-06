@@ -208,8 +208,20 @@ export default function ProductCatalog({
   };
 
   return (
-    <s-section heading="Product catalog">
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+    <s-section>
+      {/* Custom header row — s-section heading prop puts the title on its own line
+          with no way to add content beside it, so we render the row manually */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          marginBottom: "16px",
+        }}
+      >
+        <span style={{ fontSize: 14, fontWeight: 600, color: "#202223" }}>
+          Product catalog
+        </span>
         <SyncProductsButton lastSyncedAt={lastSyncedAt} />
       </div>
 
