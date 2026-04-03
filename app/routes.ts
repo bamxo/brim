@@ -19,6 +19,10 @@ export default [
     route("settings",             "backend/settings/views.tsx"),
   ]),
 
+  // ── Extension resource routes (no layout, CORS-enabled) ───────────────
+  route("api/ext/products/:id/reorder-rule", "backend/products/ext-reorder-rule.server.ts"),
+  route("api/ext/products/:id/suppliers",    "backend/products/ext-suppliers.server.ts"),
+
   // ── Webhooks (server-only, no layout) ──────────────────────────────────
   route("webhooks/app/uninstalled",          "backend/webhooks/app-uninstalled.ts"),
   route("webhooks/app/scopes_update",        "backend/webhooks/app-scopes-update.ts"),

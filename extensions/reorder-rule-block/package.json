@@ -1,0 +1,14 @@
+{
+  "name": "reorder-rule-block",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "shopify app build extension"
+  },
+  "dependencies": {
+    "preact": "^10.19.3"
+  },
+  "devDependencies": {
+    "@shopify/ui-extensions": "^2025.1.0"
+  }
+}

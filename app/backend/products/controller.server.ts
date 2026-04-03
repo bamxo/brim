@@ -56,6 +56,27 @@ export async function getProductById(shopId: string, productId: string) {
   };
 }
 
+export async function getProductByShopifyId(shopId: string, shopifyProductId: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("products")
+    .select("*")
+    .eq("shopify_product_id", shopifyProductId)
+    .eq("shop_id", shopId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data as {
+    id: string;
+    title: string;
+    variant_title: string | null;
+    sku: string | null;
+    current_stock: number;
+    image_url: string | null;
+    last_synced_at: string | null;
+  };
+}
+
 export async function getReorderRuleForProduct(shopId: string, productId: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data } = await (supabase as any)
