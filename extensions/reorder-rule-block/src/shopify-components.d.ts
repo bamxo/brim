@@ -26,5 +26,6 @@ declare namespace preact.JSX {
     "s-text": Props;
     "s-thumbnail": Props;
     "s-badge": Props;
+    "s-box": Props;
   }
 }

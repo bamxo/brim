@@ -174,46 +174,58 @@ function BlockExtension() {
         {savedOk && <s-banner tone="success">Rule saved</s-banner>}
         {formError && <s-banner tone="critical">{formError}</s-banner>}
 
-        <s-number-field
-          label="Reorder point"
-          name="reorder_point"
-          min={0}
-          required
-          value={reorderPoint}
-          onChange={(e: Event) => setReorderPoint((e.target as HTMLInputElement).value)}
-          error={fieldErrors.reorder_point}
-        />
-        <s-number-field
-          label="Reorder quantity"
-          name="reorder_quantity"
-          min={1}
-          required
-          value={reorderQuantity}
-          onChange={(e: Event) => setReorderQuantity((e.target as HTMLInputElement).value)}
-          error={fieldErrors.reorder_quantity}
-        />
-        <s-number-field
-          label="Unit cost"
-          name="unit_cost"
-          min={0}
-          step={0.01}
-          value={unitCost}
-          onChange={(e: Event) => setUnitCost((e.target as HTMLInputElement).value)}
-          details="Used to calculate purchase order total amounts"
-        />
-        <s-select
-          label="Primary supplier"
-          name="primary_supplier_id"
-          required
-          value={primarySupplierId}
-          onChange={(e: Event) => setPrimarySupplierId((e.target as HTMLSelectElement).value)}
-          error={fieldErrors.primary_supplier_id}
-        >
-          <s-option value="">— None —</s-option>
-          {suppliers.map((s) => (
-            <s-option key={s.id} value={s.id}>{s.name}</s-option>
-          ))}
-        </s-select>
+        <s-stack direction="inline" gap="none">
+          <s-box inlineSize="50%" paddingInlineEnd="base">
+            <s-number-field
+              label="Reorder point"
+              name="reorder_point"
+              min={0}
+              required
+              value={reorderPoint}
+              onChange={(e: Event) => setReorderPoint((e.target as HTMLInputElement).value)}
+              error={fieldErrors.reorder_point}
+            />
+          </s-box>
+          <s-box inlineSize="50%">
+            <s-number-field
+              label="Reorder quantity"
+              name="reorder_quantity"
+              min={1}
+              required
+              value={reorderQuantity}
+              onChange={(e: Event) => setReorderQuantity((e.target as HTMLInputElement).value)}
+              error={fieldErrors.reorder_quantity}
+            />
+          </s-box>
+        </s-stack>
+        <s-stack direction="inline" gap="none">
+          <s-box inlineSize="50%" paddingInlineEnd="base">
+            <s-number-field
+              label="Unit cost"
+              name="unit_cost"
+              min={0}
+              step={0.01}
+              value={unitCost}
+              onChange={(e: Event) => setUnitCost((e.target as HTMLInputElement).value)}
+              details="Used to calculate purchase order total amounts"
+            />
+          </s-box>
+          <s-box inlineSize="50%">
+            <s-select
+              label="Primary supplier"
+              name="primary_supplier_id"
+              required
+              value={primarySupplierId}
+              onChange={(e: Event) => setPrimarySupplierId((e.target as HTMLSelectElement).value)}
+              error={fieldErrors.primary_supplier_id}
+            >
+              <s-option value="">— None —</s-option>
+              {suppliers.map((s) => (
+                <s-option key={s.id} value={s.id}>{s.name}</s-option>
+              ))}
+            </s-select>
+          </s-box>
+        </s-stack>
 
         {rule?.is_active && !showClearConfirm && (
           <s-stack direction="block" gap="base">
