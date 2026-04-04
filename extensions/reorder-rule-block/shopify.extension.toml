@@ -1,0 +1,11 @@
+api_version = "2025-10"
+
+[[extensions]]
+uid = "8a9515a6-5bdc-f19b-82fc-fce7772f91c18f1ea168"
+type = "ui_extension"
+name = "Reorder Rule Block"
+handle = "reorder-rule-block"
+
+  [[extensions.targeting]]
+  module = "./src/BlockExtension.tsx"
+  target = "admin.product-details.block.render"
