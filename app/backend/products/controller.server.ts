@@ -1,3 +1,23 @@
+/**
+ * Products & Reorder Rules — shared data layer
+ *
+ * Two surfaces let merchants manage reorder rules for a product:
+ *
+ *   1. Brim app  (/app/products/:id)
+ *      - Server-side React Router loader/action in detail.views.tsx
+ *      - Looks up products by internal Brim UUID (params.id)
+ *      - Auth via authenticate.admin(), request body is FormData
+ *
+ *   2. Admin block extension (admin.product-details.block.render)
+ *      - Client-side Preact component in extensions/reorder-rule-block/
+ *      - Fetches via /api/ext/products/:id/reorder-rule (ext-reorder-rule.server.ts)
+ *      - Looks up products by Shopify numeric ID extracted from the GID
+ *      - Auth via authenticate.admin() + CORS headers, request body is JSON
+ *
+ * Both surfaces write to the same reorder_rules table through the functions
+ * below. Adding a third surface means adding a route handler — not touching
+ * this file.
+ */
 import supabase from "../../db/supabase.server";
 
 export async function getProductsWithRules(shopId: string) {

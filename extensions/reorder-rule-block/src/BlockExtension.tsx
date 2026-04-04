@@ -245,20 +245,21 @@ function BlockExtension() {
             <s-banner tone="critical">Are you sure? This action cannot be undone.</s-banner>
             <s-stack direction="inline" gap="base">
               <s-button disabled={saving} onClick={() => setShowClearConfirm(false)}>Cancel</s-button>
-              <s-button tone="critical" disabled={saving} onClick={handleClear}>
-                {saving ? "Clearing..." : "Confirm clear"}
+              <s-button tone="critical" loading={saving} onClick={handleClear}>
+                Confirm clear
               </s-button>
             </s-stack>
           </s-stack>
         )}
 
         <s-divider />
-        <s-link href="app:products">Manage purchase orders & more in Brim →</s-link>
+        <s-stack direction="inline" gap="base" alignItems="center" justifyContent="space-between">
+          <s-link href="app:products">Manage purchase orders & more in Brim →</s-link>
+          <s-button variant="primary" loading={saving} onClick={handleSave}>
+            Save rule
+          </s-button>
+        </s-stack>
       </s-stack>
-
-      <s-button slot="primary-action" disabled={saving} onClick={handleSave}>
-        {saving ? "Saving..." : "Save rule"}
-      </s-button>
     </s-admin-block>
   );
 }

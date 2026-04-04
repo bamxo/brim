@@ -39,7 +39,9 @@ export default function ProductDetailPage() {
   const errors = actionData?.errors ?? {};
 
   const [savedOk, setSavedOk] = useState(false);
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
+    setSaving(false);
     if (actionData?.success && !actionData.deleted) {
       setSavedOk(true);
       const t = setTimeout(() => setSavedOk(false), 4000);
@@ -57,6 +59,7 @@ export default function ProductDetailPage() {
 
   // Manual FormData harvest — Polaris fields don't participate in native FormData
   const handleSave = () => {
+    setSaving(true);
     const form = document.getElementById("rule-form") as HTMLFormElement;
     if (!form) return;
     const get = (name: string) =>
@@ -188,7 +191,7 @@ export default function ProductDetailPage() {
           </span>
           <div style={{ display: "flex", gap: "8px" }}>
             <s-button onClick={() => navigate("/app/products")}>Cancel</s-button>
-            <s-button variant="primary" onClick={handleSave}>Save rule</s-button>
+            <s-button variant="primary" loading={saving} onClick={handleSave}>Save rule</s-button>
           </div>
         </div>
       </s-section>
