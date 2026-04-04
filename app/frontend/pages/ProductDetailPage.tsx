@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useActionData, useLoaderData, useNavigate, useSubmit } from "react-router";
 import ClearRuleModal from "../components/Products/ClearRuleModal";
-import { TooltipHeader } from "../components/Products/ToolTipHeader";
 
 type Supplier = { id: string; name: string };
 
@@ -109,17 +108,15 @@ export default function ProductDetailPage() {
       <s-section heading="Reorder rule">
         <form id="rule-form" method="post">
           <s-stack direction="block" gap="base">
-            {/* Reorder point — label, asterisk, then tooltip icon (smaller, darker) */}
             <div>
-              <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: "#202223" }}>
-                  <TooltipHeader
-                    label="Reorder point"
-                    tooltip="When your stock drops to or below this number, Brim automatically creates a draft purchase order for this product."
-                    required
-                  />
-                </span>
-              </div>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 500, color: "#202223", whiteSpace: "nowrap" }}>
+                <span>Reorder point</span>
+                <span style={{ color: "#d82c0d" }}>*</span>
+                <s-clickable interestFor="tooltip-reorder-point" style={{ background: "transparent" }}>
+                  <s-icon type="question-circle" />
+                </s-clickable>
+                <s-tooltip id="tooltip-reorder-point">When your stock drops to or below this number, Brim automatically creates a draft purchase order for this product.</s-tooltip>
+              </span>
               <s-number-field
                 name="reorder_point"
                 min={0}
@@ -130,15 +127,14 @@ export default function ProductDetailPage() {
             </div>
 
             <div>
-              <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: "#202223" }}>
-                  <TooltipHeader
-                    label="Reorder quantity"
-                    tooltip="The number of units to include in the purchase order each time a reorder is triggered."
-                    required
-                  />
-                </span>
-              </div>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 500, color: "#202223", whiteSpace: "nowrap" }}>
+                <span>Reorder quantity</span>
+                <span style={{ color: "#d82c0d" }}>*</span>
+                <s-clickable interestFor="tooltip-reorder-quantity" style={{ background: "transparent" }}>
+                  <s-icon type="question-circle" />
+                </s-clickable>
+                <s-tooltip id="tooltip-reorder-quantity">The number of units to include in the purchase order each time a reorder is triggered.</s-tooltip>
+              </span>
               <s-number-field
                 name="reorder_quantity"
                 min={1}
