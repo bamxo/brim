@@ -107,26 +107,32 @@ export async function deleteSupplier(shopId: string, supplierId: string) {
   // Delete reorder rules where this is the primary supplier — they're useless without one.
   // Rules where this was only the backup supplier are kept but backup is nulled out.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any)
+  const { error: rulesError } = await (supabase as any)
     .from("reorder_rules")
     .delete()
     .eq("primary_supplier_id", supplierId)
     .eq("shop_id", shopId);
 
+  if (rulesError) return { error: `Failed to remove reorder rules: ${rulesError.message}` };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any)
+  const { error: backupError } = await (supabase as any)
     .from("reorder_rules")
     .update({ backup_supplier_id: null })
     .eq("backup_supplier_id", supplierId)
     .eq("shop_id", shopId);
 
+  if (backupError) return { error: `Failed to clear backup supplier refs: ${backupError.message}` };
+
   // Retain historical POs but unlink the supplier so the record is preserved.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any)
+  const { error: poError } = await (supabase as any)
     .from("purchase_orders")
     .update({ supplier_id: null })
     .eq("supplier_id", supplierId)
     .eq("shop_id", shopId);
+
+  if (poError) return { error: `Failed to unlink purchase orders: ${poError.message}` };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)

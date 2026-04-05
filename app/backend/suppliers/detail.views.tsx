@@ -82,6 +82,9 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     return { productOk: true };
   }
 
+  // ── Unknown intent ──────────────────────────────────────────────
+  if (intent) return { errors: { form: `Unknown action: ${intent}` } };
+
   // ── Update supplier info ─────────────────────────────────────────
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();

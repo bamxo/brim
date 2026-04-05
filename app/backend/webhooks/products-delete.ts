@@ -31,20 +31,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     // Deactivate reorder rules before soft-deleting the product rows
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
+    const { error: ruleError } = await (supabase as any)
       .from("reorder_rules")
       .update({ is_active: false })
       .eq("shop_id", shopRow.id)
       .in("product_id", productIds);
+
+    if (ruleError) console.error("Failed to deactivate reorder rules:", ruleError.message);
   }
 
   // Soft-delete all variant rows for the deleted product
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any)
+  const { error: deleteError } = await (supabase as any)
     .from("products")
     .update({ is_active: false })
     .eq("shop_id", shopRow.id)
     .eq("shopify_product_id", String(shopifyProductId));
+
+  if (deleteError) console.error("Failed to soft-delete products:", deleteError.message);
 
   return new Response();
 };
