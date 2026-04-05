@@ -234,7 +234,8 @@ export async function generateDraftPOs(shopId: string): Promise<{
     }));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from("inventory_trigger_log").insert(triggerLogs);
+    const { error: logError } = await (supabase as any).from("inventory_trigger_log").insert(triggerLogs);
+    if (logError) console.error("Failed to insert trigger logs:", logError.message);
   }
 
   if (suppressedCount > 0) {
@@ -250,7 +251,8 @@ export async function generateDraftPOs(shopId: string): Promise<{
         purchase_order_id: null,
       }));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from("inventory_trigger_log").insert(suppressedLogs);
+    const { error: suppressedLogError } = await (supabase as any).from("inventory_trigger_log").insert(suppressedLogs);
+    if (suppressedLogError) console.error("Failed to insert suppressed trigger logs:", suppressedLogError.message);
   }
 
   return { posCreated, linesAdded, suppressedCount };

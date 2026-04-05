@@ -17,6 +17,9 @@ function corsJson(data: unknown) {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
   const { session } = await authenticate.admin(request);
   const shop = await getShopByDomain(session.shop);
   const suppliers = await getActiveSuppliersMinimal(shop.id);

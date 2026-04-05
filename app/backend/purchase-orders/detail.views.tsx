@@ -46,6 +46,13 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     const lineIds = formData.getAll("line_id") as string[];
     const quantities = formData.getAll("quantity") as string[];
 
+    for (const q of quantities) {
+      const n = Number(q);
+      if (Number.isNaN(n) || n < 0 || !Number.isInteger(n)) {
+        return { success: false, error: "Invalid quantity" };
+      }
+    }
+
     let total = 0;
     for (let i = 0; i < lineIds.length; i++) {
       const qty = Number(quantities[i]);
@@ -54,6 +61,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
         .from("purchase_order_line_items")
         .update({ quantity_ordered: qty })
         .eq("id", lineIds[i])
+        .eq("purchase_order_id", params.id)
         .select("unit_cost")
         .single();
 

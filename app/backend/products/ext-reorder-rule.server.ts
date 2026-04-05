@@ -63,7 +63,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 
   if (isNaN(reorderPoint) || reorderPoint < 0)
     return corsJson({ success: false, errors: { reorder_point: "Reorder point must be 0 or greater" } });
-  if (!reorderQuantity || reorderQuantity <= 0)
+  if (isNaN(reorderQuantity) || reorderQuantity <= 0)
     return corsJson({ success: false, errors: { reorder_quantity: "Reorder quantity must be greater than 0" } });
   if (!primarySupplierId)
     return corsJson({ success: false, errors: { primary_supplier_id: "A primary supplier is required" } });

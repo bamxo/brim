@@ -25,7 +25,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!shopRow) return new Response();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any)
+  const { error: updateError } = await (supabase as any)
     .from("products")
     .update({
       current_stock: available,
@@ -33,6 +33,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     })
     .eq("shopify_inventory_item_id", String(inventory_item_id))
     .eq("shop_id", shopRow.id);
+
+  if (updateError) console.error("Failed to update product stock:", updateError.message);
 
   await checkAndTriggerReorder(shopRow.id, String(inventory_item_id), available);
 

@@ -6,6 +6,15 @@ const FROM = process.env.RESEND_FROM_ADDRESS ?? "orders@brimapp.com";
 const INBOUND_DOMAIN = process.env.RESEND_INBOUND_DOMAIN ?? "replies.brimapp.com";
 const APP_URL = process.env.APP_URL ?? "https://brimapp.com";
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 type LineItem = {
   product_name: string;
   variant_title: string | null;
@@ -43,9 +52,9 @@ function buildPoEmailHtml(opts: SendPOEmailOptions): string {
       (l) => `
     <tr>
       <td style="padding:8px;border-bottom:1px solid #eee;">
-        ${l.product_name}${l.variant_title ? ` — ${l.variant_title}` : ""}
+        ${escapeHtml(l.product_name)}${l.variant_title ? ` — ${escapeHtml(l.variant_title)}` : ""}
       </td>
-      <td style="padding:8px;border-bottom:1px solid #eee;">${l.sku ?? "—"}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;">${l.sku ? escapeHtml(l.sku) : "—"}</td>
       <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">${l.quantity_ordered}</td>
       <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">${formatCurrency(l.unit_cost, currency)}</td>
       <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">${formatCurrency(l.line_total, currency)}</td>
@@ -60,8 +69,8 @@ function buildPoEmailHtml(opts: SendPOEmailOptions): string {
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family:sans-serif;color:#111;max-width:640px;margin:0 auto;padding:24px;">
-  <h2 style="margin-top:0;">Purchase Order ${poNumber}</h2>
-  <p>Dear ${supplierName},</p>
+  <h2 style="margin-top:0;">Purchase Order ${escapeHtml(poNumber)}</h2>
+  <p>Dear ${escapeHtml(supplierName)},</p>
   <p>Please find below our purchase order. Kindly confirm receipt and your expected delivery date by replying to this email.</p>
 
   <table style="width:100%;border-collapse:collapse;margin:16px 0;">
@@ -85,12 +94,12 @@ function buildPoEmailHtml(opts: SendPOEmailOptions): string {
     </tfoot>
   </table>
 
-  ${notes ? `<p><strong>Notes:</strong> ${notes}</p>` : ""}
+  ${notes ? `<p><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : ""}
 
   <p>Please confirm this order by replying to this email with your expected delivery date.</p>
 
   <p style="margin-top:32px;color:#888;font-size:12px;">
-    Sent by ${shopName} via Brim &mdash;
+    Sent by ${escapeHtml(shopName)} via Brim &mdash;
     <a href="${APP_URL}" style="color:#888;">brimapp.com</a>
   </p>
 </body>
