@@ -1,6 +1,6 @@
 /** @jsxImportSource preact */
 import { render } from "preact";
-import { useState, useEffect } from "preact/hooks";
+import { useState, useEffect, useId } from "preact/hooks";
 
 interface Rule {
   reorder_point: number;
@@ -8,6 +8,24 @@ interface Rule {
   unit_cost: number | null;
   primary_supplier_id: string | null;
   is_active: boolean;
+}
+
+function TooltipLabel({ label, tooltip, required }: { label: string; tooltip: string; required?: boolean }) {
+  const rawId = useId();
+  const id = rawId.replace(/:/g, "-");
+  return (
+    <>
+      <s-tooltip id={id}>{tooltip}</s-tooltip>
+      <s-stack direction="inline" gap="small-200" align-items="center">
+        <s-text>{label}{required && <s-text tone="critical">{" "}*</s-text>}</s-text>
+        <s-box inline-size="20px">
+          <s-clickable interestFor={id} padding="none" accessibilityLabel={`More info about ${label}`}>
+            <s-icon type="question-circle" />
+          </s-clickable>
+        </s-box>
+      </s-stack>
+    </>
+  );
 }
 
 function extractShopifyId(gid: string) {
@@ -176,26 +194,38 @@ function BlockExtension() {
 
         <s-stack direction="inline" gap="none">
           <s-box inlineSize="50%" paddingInlineEnd="base">
-            <s-number-field
-              label="Reorder point"
-              name="reorder_point"
-              min={0}
-              required
-              value={reorderPoint}
-              onChange={(e: Event) => setReorderPoint((e.target as HTMLInputElement).value)}
-              error={fieldErrors.reorder_point}
-            />
+            <div>
+              <TooltipLabel
+                label="Reorder point"
+                tooltip="When your stock drops to or below this number, Brim automatically creates a draft purchase order for this product."
+                required
+              />
+              <s-number-field
+                name="reorder_point"
+                min={0}
+                required
+                value={reorderPoint}
+                onChange={(e: Event) => setReorderPoint((e.target as HTMLInputElement).value)}
+                error={fieldErrors.reorder_point}
+              />
+            </div>
           </s-box>
           <s-box inlineSize="50%">
-            <s-number-field
-              label="Reorder quantity"
-              name="reorder_quantity"
-              min={1}
-              required
-              value={reorderQuantity}
-              onChange={(e: Event) => setReorderQuantity((e.target as HTMLInputElement).value)}
-              error={fieldErrors.reorder_quantity}
-            />
+            <div>
+              <TooltipLabel
+                label="Reorder quantity"
+                tooltip="The number of units to include in the purchase order each time a reorder is triggered."
+                required
+              />
+              <s-number-field
+                name="reorder_quantity"
+                min={1}
+                required
+                value={reorderQuantity}
+                onChange={(e: Event) => setReorderQuantity((e.target as HTMLInputElement).value)}
+                error={fieldErrors.reorder_quantity}
+              />
+            </div>
           </s-box>
         </s-stack>
         <s-stack direction="inline" gap="none">

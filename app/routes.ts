@@ -9,7 +9,6 @@ export default [
   route("app", "frontend/app.tsx", [
     index("backend/dashboard/views.tsx"),
     route("products",             "backend/products/views.tsx"),
-    route("products/sync",        "backend/products/sync.views.tsx"),
     route("products/:id",         "backend/products/detail.views.tsx"),
     route("purchase-orders",      "backend/purchase-orders/views.tsx"),
     route("purchase-orders/:id",  "backend/purchase-orders/detail.views.tsx"),

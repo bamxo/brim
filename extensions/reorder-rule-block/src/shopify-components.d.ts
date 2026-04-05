@@ -10,6 +10,9 @@ declare const shopify: {
 };
 
 declare namespace preact.JSX {
+  interface HTMLAttributes<T> {
+    interestFor?: string;
+  }
   interface IntrinsicElements {
     "s-admin-block": Props;
     "s-admin-action": Props;
@@ -27,5 +30,8 @@ declare namespace preact.JSX {
     "s-thumbnail": Props;
     "s-badge": Props;
     "s-box": Props;
+    "s-tooltip": Props;
+    "s-clickable": Props;
+    "s-icon": Props;
   }
 }
