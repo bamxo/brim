@@ -56,10 +56,9 @@ export default function SettingsPage() {
             label="Default send method"
             value={settings?.default_send_method ?? "ask"}
           >
-            <s-option value="ask">Always ask</s-option>
+            <s-option value="ask">Ask me every time</s-option>
             <s-option value="brim">Send via Brim</s-option>
-            <s-option value="clipboard">Copy to clipboard</s-option>
-            <s-option value="gmail" disabled>Send via Gmail (coming soon)</s-option>
+            <s-option value="gmail">Send via Gmail</s-option>
           </s-select>
         </s-section>
 

@@ -228,7 +228,7 @@ create table shop_settings (
   shop_id                         uuid references shops(id) on delete cascade unique,
   -- notification_channel: shopify, email, both
   notification_channel            varchar default 'email',
-  -- default_send_method: brim, gmail, clipboard, ask
+  -- default_send_method: brim, gmail, ask
   default_send_method             varchar default 'ask',
   send_method_brim_count          integer default 0,
   send_method_gmail_count         integer default 0,
