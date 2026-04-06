@@ -1,4 +1,5 @@
 import { useActionData, useLoaderData, useNavigate, useSubmit } from "react-router";
+import TitleBar from "../components/Header/TitleBar";
 
 type LineItem = {
   id: string;
@@ -48,7 +49,7 @@ export default function PurchaseOrderDetailPage() {
   };
 
   return (
-    <s-page heading={po.po_number}>
+    <TitleBar heading={po.po_number} breadcrumbs={[{ label: "Purchase Orders", href: "/app/purchase-orders" }]}>
       {isDraft && (
         <s-button
           slot="primary-action"
@@ -193,6 +194,6 @@ export default function PurchaseOrderDetailPage() {
           </s-button>
         </s-section>
       )}
-    </s-page>
+    </TitleBar>
   );
 }

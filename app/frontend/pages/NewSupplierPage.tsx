@@ -1,4 +1,5 @@
 import { useActionData, useNavigate, useSubmit } from "react-router";
+import TitleBar from "../components/Header/TitleBar";
 
 export default function NewSupplierPage() {
   const actionData = useActionData<{ errors?: Record<string, string | undefined> }>();
@@ -20,7 +21,7 @@ export default function NewSupplierPage() {
   };
 
   return (
-    <s-page heading="Add supplier">
+    <TitleBar heading="Add supplier" breadcrumbs={[{ label: "Suppliers", href: "/app/suppliers" }]}>
       {"form" in errors && (
         <s-banner tone="critical" heading="Could not save supplier">
           <s-paragraph>{errors.form}</s-paragraph>
@@ -61,6 +62,6 @@ export default function NewSupplierPage() {
           <s-button variant="primary" onClick={handleSave}>Save supplier</s-button>
         </div>
       </s-section>
-    </s-page>
+    </TitleBar>
   );
 }

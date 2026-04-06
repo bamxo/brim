@@ -1,4 +1,5 @@
 import { useLoaderData, useNavigate } from "react-router";
+import TitleBar from "../components/Header/TitleBar";
 import SupplierTable, { type Supplier } from "../components/Supplier/SupplierTable";
 
 type LoaderData = { suppliers: Supplier[] };
@@ -8,7 +9,7 @@ export default function SuppliersPage() {
   const navigate = useNavigate();
 
   return (
-    <s-page heading="Suppliers">
+    <TitleBar heading="Suppliers">
       <s-button
         slot="primary-action"
         variant="primary"
@@ -18,6 +19,6 @@ export default function SuppliersPage() {
       </s-button>
 
       <SupplierTable suppliers={suppliers} />
-    </s-page>
+    </TitleBar>
   );
 }

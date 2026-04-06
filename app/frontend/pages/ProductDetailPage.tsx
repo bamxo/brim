@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useActionData, useLoaderData, useNavigate, useSubmit } from "react-router";
+import TitleBar from "../components/Header/TitleBar";
 import ClearRuleModal from "../components/Products/ClearRuleModal";
 import ProductInfoSidebar from "../components/Products/ProductInfoSidebar";
 import ReorderRuleForm from "../components/Products/ReorderRuleForm";
@@ -76,7 +77,7 @@ export default function ProductDetailPage() {
   };
 
   return (
-    <s-page heading={product.title}>
+    <TitleBar heading={product.title} breadcrumbs={[{ label: "Products", href: "/app/products" }]}>
       {"form" in errors && (
         <s-banner tone="critical" heading="Could not save rule">
           <s-paragraph>{errors.form}</s-paragraph>
@@ -108,6 +109,6 @@ export default function ProductDetailPage() {
           submit(fd, { method: "post" });
         }}
       />
-    </s-page>
+    </TitleBar>
   );
 }

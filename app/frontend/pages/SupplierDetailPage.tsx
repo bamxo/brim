@@ -1,4 +1,5 @@
 import { useActionData, useFetcher, useLoaderData, useSubmit } from "react-router";
+import TitleBar from "../components/Header/TitleBar";
 import SupplierForm from "../components/Supplier/SupplierForm";
 import ProductCatalog, { type AssignedProduct, type Product } from "../components/Supplier/ProductCatalog";
 import DeleteModal from "../components/Supplier/DeleteSupplierModal";
@@ -60,7 +61,7 @@ export default function SupplierDetailPage() {
   };
 
   return (
-    <s-page heading={supplier.name}>
+    <TitleBar heading={supplier.name} breadcrumbs={[{ label: "Suppliers", href: "/app/suppliers" }]}>
       {"form" in errors && (
         <s-banner tone="critical" heading="Could not save supplier">
           <s-paragraph>{errors.form}</s-paragraph>
@@ -98,6 +99,6 @@ export default function SupplierDetailPage() {
           Delete supplier
         </s-button>
       </s-section>
-    </s-page>
+    </TitleBar>
   );
 }
