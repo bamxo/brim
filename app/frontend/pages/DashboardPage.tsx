@@ -1,4 +1,5 @@
 import { useLoaderData, useNavigate } from "react-router";
+import TitleBar from "../components/Header/TitleBar";
 
 type AtRiskProduct = {
   ruleId: string;
@@ -52,7 +53,7 @@ export default function DashboardPage() {
     overdueDeliveries.length > 0;
 
   return (
-    <s-page heading="Dashboard">
+    <TitleBar heading="Dashboard">
       <s-button
         slot="primary-action"
         variant="primary"
@@ -320,6 +321,6 @@ export default function DashboardPage() {
           </s-stack>
         </s-section>
       )}
-    </s-page>
+    </TitleBar>
   );
 }

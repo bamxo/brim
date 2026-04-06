@@ -1,4 +1,5 @@
 import { useActionData, useLoaderData, useSubmit } from "react-router";
+import TitleBar from "../components/Header/TitleBar";
 
 type Settings = {
   notification_channel: string | null;
@@ -22,7 +23,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <s-page heading="Settings">
+    <TitleBar heading="Settings">
       <s-button slot="primary-action" variant="primary" onClick={handleSave}>
         Save
       </s-button>
@@ -88,6 +89,6 @@ export default function SettingsPage() {
           />
         </s-section>
       </form>
-    </s-page>
+    </TitleBar>
   );
 }

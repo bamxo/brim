@@ -1,4 +1,5 @@
 import { useLoaderData, useNavigate } from "react-router";
+import TitleBar from "../components/Header/TitleBar";
 
 type BadgeTone =
   | "auto"
@@ -56,7 +57,7 @@ export default function PurchaseOrdersPage() {
   const navigate = useNavigate();
 
   return (
-    <s-page heading="Purchase Orders">
+    <TitleBar heading="Purchase Orders">
       {purchaseOrders.length === 0 ? (
         <s-section heading="No purchase orders yet">
           <s-paragraph>
@@ -127,6 +128,6 @@ export default function PurchaseOrdersPage() {
           </s-table>
         </s-section>
       )}
-    </s-page>
+    </TitleBar>
   );
 }

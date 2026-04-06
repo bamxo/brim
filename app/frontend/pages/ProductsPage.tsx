@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLoaderData } from "react-router";
+import TitleBar from "../components/Header/TitleBar";
 import SyncProductsButton from "../components/Supplier/SyncProductsButton";
 import EmptyProductsState from "../components/Products/EmptyProductsState";
 import ProductSearchBar from "../components/Products/ProductSearchBar";
@@ -37,7 +38,7 @@ export default function ProductsPage() {
   );
 
   return (
-    <s-page heading="Products">
+    <TitleBar heading="Products">
       {products.length === 0 ? (
         <EmptyProductsState lastSyncedAt={lastSyncedAt} />
       ) : (
@@ -68,6 +69,6 @@ export default function ProductsPage() {
           )}
         </s-section>
       )}
-    </s-page>
+    </TitleBar>
   );
 }
