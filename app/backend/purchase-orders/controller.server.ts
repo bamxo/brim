@@ -16,18 +16,17 @@ type ReorderCandidate = {
 };
 
 async function generatePoNumber(shopId: string): Promise<string> {
-  const today = new Date();
-  const datePart = today.toISOString().slice(0, 10).replace(/-/g, "");
+  const year = new Date().getFullYear();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { count } = await (supabase as any)
     .from("purchase_orders")
     .select("id", { count: "exact", head: true })
     .eq("shop_id", shopId)
-    .like("po_number", `PO-${datePart}-%`);
+    .like("po_number", `PO-${year}-%`);
 
-  const seq = String((count ?? 0) + 1).padStart(3, "0");
-  return `PO-${datePart}-${seq}`;
+  const seq = String((count ?? 0) + 1).padStart(4, "0");
+  return `PO-${year}-${seq}`;
 }
 
 export async function generateDraftPOs(shopId: string): Promise<{

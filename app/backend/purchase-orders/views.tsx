@@ -15,8 +15,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       `
       id, po_number, status, is_urgent,
       total_amount, currency, created_at,
-      confirmed_delivery_date,
-      suppliers (name)
+      confirmed_delivery_date, sent_at,
+      suppliers (name),
+      purchase_order_line_items (product_name, quantity_ordered)
     `,
     )
     .eq("shop_id", shop.id)
