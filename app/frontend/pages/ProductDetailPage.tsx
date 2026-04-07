@@ -64,6 +64,7 @@ export default function ProductDetailPage() {
     const fd = new FormData();
     fd.append("reorder_point", get("reorder_point"));
     fd.append("reorder_quantity", get("reorder_quantity"));
+    fd.append("sku", get("sku"));
     fd.append("unit_cost", get("unit_cost"));
     fd.append("primary_supplier_id", get("primary_supplier_id"));
     submit(fd, { method: "post" });
@@ -88,6 +89,7 @@ export default function ProductDetailPage() {
 
       <ReorderRuleForm
         rule={rule}
+        productSku={product.sku}
         suppliers={suppliers}
         errors={errors}
         onSave={handleSave}

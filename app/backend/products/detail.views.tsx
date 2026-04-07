@@ -11,6 +11,7 @@ import {
   getReorderRuleForProduct,
   upsertReorderRule,
   deleteReorderRule,
+  updateProductSku,
 } from "./controller.server";
 import { getActiveSuppliersMinimal } from "../suppliers/controller.server";
 
@@ -43,6 +44,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   const reorderQuantity = Number(formData.get("reorder_quantity"));
   const primarySupplierId = formData.get("primary_supplier_id") as string | null;
   const unitCost = formData.get("unit_cost") ? Number(formData.get("unit_cost")) : null;
+  const sku = String(formData.get("sku") ?? "").trim() || null;
 
   if (!reorderPoint || reorderPoint < 0)
     return { errors: { reorder_point: "Reorder point must be a positive number" }, success: false };
@@ -51,18 +53,22 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   if (!primarySupplierId)
     return { errors: { primary_supplier_id: "A primary supplier is required" }, success: false };
 
-  const { error } = await upsertReorderRule({
-    shop_id: shop.id,
-    product_id: params.id,
-    primary_supplier_id: primarySupplierId,
-    backup_supplier_id: null,
-    reorder_point: reorderPoint,
-    reorder_quantity: reorderQuantity,
-    unit_cost: unitCost,
-    is_active: true,
-  });
+  const [ruleResult, skuResult] = await Promise.all([
+    upsertReorderRule({
+      shop_id: shop.id,
+      product_id: params.id,
+      primary_supplier_id: primarySupplierId,
+      backup_supplier_id: null,
+      reorder_point: reorderPoint,
+      reorder_quantity: reorderQuantity,
+      unit_cost: unitCost,
+      is_active: true,
+    }),
+    updateProductSku(shop.id, params.id!, sku),
+  ]);
 
-  if (error) return { errors: { form: error }, success: false };
+  if (ruleResult.error) return { errors: { form: ruleResult.error }, success: false };
+  if (skuResult.error) return { errors: { form: skuResult.error }, success: false };
   return { success: true, deleted: false, errors: {} };
 };
 

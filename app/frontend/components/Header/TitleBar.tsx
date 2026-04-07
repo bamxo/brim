@@ -4,12 +4,13 @@ type TitleBarProps = {
   heading: string;
   subtitle?: string;
   breadcrumbs?: Breadcrumb[];
+  inlineSize?: "small" | "base" | "large";
   children?: React.ReactNode;
 };
 
-export default function TitleBar({ heading, subtitle, breadcrumbs, children }: TitleBarProps) {
+export default function TitleBar({ heading, subtitle, breadcrumbs, inlineSize, children }: TitleBarProps) {
   return (
-    <s-page heading={heading}>
+    <s-page heading={heading} inlineSize={inlineSize}>
       {breadcrumbs?.map((crumb, i) => {
         const isLast = i === (breadcrumbs.length - 1);
         return (

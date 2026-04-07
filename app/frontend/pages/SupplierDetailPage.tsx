@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useActionData, useFetcher, useLoaderData, useSubmit } from "react-router";
 import TitleBar from "../components/Header/TitleBar";
 import SupplierForm from "../components/Supplier/SupplierForm";
-import ProductCatalog, { type AssignedProduct, type Product } from "../components/Supplier/ProductCatalog";
+import ProductCatalog, { type AssignedProduct, type CustomItem, type Product } from "../components/Supplier/ProductCatalog";
 import DeleteModal from "../components/Supplier/DeleteSupplierModal";
+import AddProductModal, { type CustomItemFormData } from "../components/Supplier/AddProductModal";
 
 type LoaderData = {
   supplier: {
@@ -14,6 +16,7 @@ type LoaderData = {
   };
   assignedProducts: AssignedProduct[];
   allProducts: Product[];
+  customItems: CustomItem[];
   lastSyncedAt: string | null;
 };
 
@@ -23,16 +26,42 @@ type ActionData = {
   syncResult?: { synced: number; error: string | null };
   productOk?: boolean;
   productError?: string;
+  customItemOk?: boolean;
+  customItemError?: string;
 };
 
+type PendingStoreProduct = { id: string; title: string; sku: string | null };
+
 export default function SupplierDetailPage() {
-  const { supplier, assignedProducts, allProducts, lastSyncedAt } = useLoaderData<LoaderData>();
+  const { supplier, assignedProducts, allProducts, customItems, lastSyncedAt } =
+    useLoaderData<LoaderData>();
   const actionData = useActionData<ActionData>();
   const submit = useSubmit();
   const productFetcher = useFetcher<ActionData>();
+  const customItemFetcher = useFetcher<ActionData>();
+
+  const [editingItem, setEditingItem] = useState<CustomItem | null>(null);
+  const [pendingStoreProduct, setPendingStoreProduct] = useState<PendingStoreProduct | null>(null);
 
   const errors = (actionData?.errors ?? {}) as Record<string, string | undefined>;
 
+  const openModal = () => {
+    setTimeout(() => {
+      const modal = document.getElementById("add-product-modal") as HTMLElement & {
+        showOverlay: () => void;
+      };
+      modal?.showOverlay();
+    }, 0);
+  };
+
+  const hideModal = () => {
+    const modal = document.getElementById("add-product-modal") as HTMLElement & {
+      hideOverlay: () => void;
+    };
+    modal?.hideOverlay();
+  };
+
+  // ── Delete supplier ─────────────────────────────────────────────
   const handleDelete = () => {
     const modal = document.getElementById("delete-supplier-modal") as HTMLElement & {
       showOverlay: () => void;
@@ -46,11 +75,11 @@ export default function SupplierDetailPage() {
     submit(fd, { method: "post" });
   };
 
-  const handleAddProduct = (productId: string) => {
-    const fd = new FormData();
-    fd.append("intent", "add-product");
-    fd.append("product_id", productId);
-    productFetcher.submit(fd, { method: "post" });
+  // ── Store product: open dialog with pre-filled name ─────────────
+  const handleAddProduct = (product: Product) => {
+    setEditingItem(null);
+    setPendingStoreProduct({ id: product.id, title: product.title, sku: product.sku });
+    openModal();
   };
 
   const handleRemoveProduct = (productId: string) => {
@@ -60,8 +89,65 @@ export default function SupplierDetailPage() {
     productFetcher.submit(fd, { method: "post" });
   };
 
+  // ── Custom item: open dialog empty ──────────────────────────────
+  const showAddCustomModal = () => {
+    setPendingStoreProduct(null);
+    setEditingItem(null);
+    openModal();
+  };
+
+  const showEditCustomModal = (item: CustomItem) => {
+    setPendingStoreProduct(null);
+    setEditingItem(item);
+    openModal();
+  };
+
+  // ── Unified modal submit handler ────────────────────────────────
+  const handleModalSubmit = (data: CustomItemFormData) => {
+    const fd = new FormData();
+
+    if (pendingStoreProduct) {
+      fd.append("intent", "add-product");
+      fd.append("product_id", pendingStoreProduct.id);
+      if (data.sku) fd.append("sku", data.sku);
+      if (data.unit_cost) fd.append("unit_cost", data.unit_cost);
+      productFetcher.submit(fd, { method: "post" });
+    } else if (editingItem) {
+      fd.append("intent", "edit-custom-item");
+      fd.append("item_id", editingItem.id);
+      fd.append("name", data.name);
+      fd.append("sku", data.sku);
+      fd.append("unit_cost", data.unit_cost);
+      customItemFetcher.submit(fd, { method: "post" });
+    } else {
+      fd.append("intent", "add-custom-item");
+      fd.append("name", data.name);
+      fd.append("sku", data.sku);
+      fd.append("unit_cost", data.unit_cost);
+      customItemFetcher.submit(fd, { method: "post" });
+    }
+
+    hideModal();
+    setPendingStoreProduct(null);
+    setEditingItem(null);
+  };
+
+  const handleRemoveCustomItem = (itemId: string) => {
+    const fd = new FormData();
+    fd.append("intent", "remove-custom-item");
+    fd.append("item_id", itemId);
+    customItemFetcher.submit(fd, { method: "post" });
+  };
+
   return (
-    <TitleBar heading={supplier.name} breadcrumbs={[{ label: "Suppliers", href: "/app/suppliers" }]}>
+    <TitleBar
+      heading={supplier.name}
+      breadcrumbs={[{ label: "Suppliers", href: "/app/suppliers" }]}
+    >
+      <s-button slot="secondary-actions" tone="critical" onClick={handleDelete}>
+        Delete supplier
+      </s-button>
+
       {"form" in errors && (
         <s-banner tone="critical" heading="Could not save supplier">
           <s-paragraph>{errors.form}</s-paragraph>
@@ -77,10 +163,15 @@ export default function SupplierDetailPage() {
       <ProductCatalog
         allProducts={allProducts}
         assignedProducts={assignedProducts}
+        customItems={customItems}
         lastSyncedAt={lastSyncedAt}
         productError={productFetcher.data?.productError}
+        customItemError={customItemFetcher.data?.customItemError}
         onAddProduct={handleAddProduct}
         onRemoveProduct={handleRemoveProduct}
+        onAddCustomItem={showAddCustomModal}
+        onEditCustomItem={showEditCustomModal}
+        onRemoveCustomItem={handleRemoveCustomItem}
       />
 
       <DeleteModal
@@ -89,16 +180,12 @@ export default function SupplierDetailPage() {
         onConfirm={confirmDelete}
       />
 
-      <s-section heading="Danger zone" slot="aside">
-        <s-paragraph>
-          Permanently deletes this supplier and removes them from all active
-          reorder rules. Historical purchase orders are kept but will no longer
-          reference this supplier. This action cannot be undone.
-        </s-paragraph>
-        <s-button tone="critical" onClick={handleDelete}>
-          Delete supplier
-        </s-button>
-      </s-section>
+      <AddProductModal
+        modalId="add-product-modal"
+        editingItem={editingItem}
+        storeProduct={pendingStoreProduct}
+        onSubmit={handleModalSubmit}
+      />
     </TitleBar>
   );
 }

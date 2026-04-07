@@ -144,3 +144,67 @@ export async function deleteSupplier(shopId: string, supplierId: string) {
   if (error) return { error: error.message };
   return { error: null };
 }
+
+// ── Custom catalog items ──────────────────────────────────────────────────────
+
+export async function getCustomItemsBySupplier(shopId: string, supplierId: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("supplier_catalog_items")
+    .select("id, name, sku, unit_cost")
+    .eq("shop_id", shopId)
+    .eq("supplier_id", supplierId)
+    .order("name");
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as {
+    id: string;
+    name: string;
+    sku: string | null;
+    unit_cost: number | null;
+  }[];
+}
+
+export async function createCustomItem(
+  shopId: string,
+  supplierId: string,
+  item: { name: string; sku: string | null; unit_cost: number | null },
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: row, error } = await (supabase as any)
+    .from("supplier_catalog_items")
+    .insert({ shop_id: shopId, supplier_id: supplierId, ...item })
+    .select("id")
+    .single();
+
+  if (error) return { id: null, error: error.message };
+  return { id: row.id as string, error: null };
+}
+
+export async function updateCustomItem(
+  shopId: string,
+  itemId: string,
+  item: { name: string; sku: string | null; unit_cost: number | null },
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("supplier_catalog_items")
+    .update(item)
+    .eq("id", itemId)
+    .eq("shop_id", shopId);
+
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
+export async function deleteCustomItem(shopId: string, itemId: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("supplier_catalog_items")
+    .delete()
+    .eq("id", itemId)
+    .eq("shop_id", shopId);
+
+  if (error) return { error: error.message };
+  return { error: null };
+}
