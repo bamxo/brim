@@ -33,6 +33,7 @@ type SendPOEmailOptions = {
   currency: string;
   notes?: string | null;
   shopName: string;
+  pdfBuffer?: Buffer | null;
 };
 
 export function getReplyToAddress(poId: string): string {
@@ -109,12 +110,17 @@ function buildPoEmailHtml(opts: SendPOEmailOptions): string {
 export async function sendPOEmail(opts: SendPOEmailOptions): Promise<string> {
   const replyTo = getReplyToAddress(opts.poId);
 
+  const attachments = opts.pdfBuffer
+    ? [{ filename: `${opts.poNumber}.pdf`, content: opts.pdfBuffer }]
+    : undefined;
+
   const { data, error } = await resend.emails.send({
     from: FROM,
     to: opts.supplierEmail,
     replyTo,
     subject: `Purchase Order ${opts.poNumber} from ${opts.shopName}`,
     html: buildPoEmailHtml(opts),
+    attachments,
   });
 
   if (error) throw new Error(`Resend error: ${error.message}`);

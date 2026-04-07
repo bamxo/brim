@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useActionData, useLoaderData, useNavigate, useSubmit } from "react-router";
 import TitleBar from "../components/Header/TitleBar";
 
@@ -14,6 +15,7 @@ type LineItem = {
 
 type LoaderData = {
   po: {
+    id: string;
     po_number: string;
     status: string;
     currency: string;
@@ -23,16 +25,26 @@ type LoaderData = {
     suppliers: { id: string; name: string; email: string; phone: string | null } | null;
     purchase_order_line_items: LineItem[];
   };
+  pdfDataUrl: string | null;
 };
 
 type ActionData = { success?: boolean; error?: string | null };
 
 export default function PurchaseOrderDetailPage() {
-  const { po } = useLoaderData<LoaderData>();
+  const { po, pdfDataUrl } = useLoaderData<LoaderData>();
   const actionData = useActionData<ActionData>();
   const navigate = useNavigate();
   const submit = useSubmit();
   const isDraft = po.status === "draft";
+  const [pdfExpanded, setPdfExpanded] = useState(false);
+
+  const handleDownloadPdf = () => {
+    if (!pdfDataUrl) return;
+    const a = document.createElement("a");
+    a.href = pdfDataUrl;
+    a.download = `${po.po_number}.pdf`;
+    a.click();
+  };
 
   const handleSend = (sendMethod: string) => {
     const fd = new FormData();
@@ -65,7 +77,6 @@ export default function PurchaseOrderDetailPage() {
       >
         Back
       </s-button>
-
       {actionData?.error && (
         <s-banner tone="critical" heading="Error">
           <s-paragraph>{actionData.error}</s-paragraph>
@@ -170,6 +181,86 @@ export default function PurchaseOrderDetailPage() {
           )}
         </form>
       </s-section>
+
+      {pdfDataUrl && (
+        <s-section heading="Document">
+          {!pdfExpanded ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                padding: "4px 0",
+              }}
+            >
+              <div
+                style={{
+                  width: "40px",
+                  height: "52px",
+                  border: "1px solid #d9d9d9",
+                  borderRadius: "4px",
+                  overflow: "hidden",
+                  flexShrink: 0,
+                  background: "#fff",
+                }}
+              >
+                <iframe
+                  src={pdfDataUrl}
+                  style={{
+                    width: "612px",
+                    height: "792px",
+                    transform: "scale(0.065)",
+                    transformOrigin: "top left",
+                    border: "none",
+                    pointerEvents: "none",
+                  }}
+                  tabIndex={-1}
+                  title="PDF thumbnail"
+                />
+              </div>
+              <span style={{ flex: 1, fontSize: "13px", fontWeight: 500 }}>
+                PDF Preview
+              </span>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <s-button onClick={() => setPdfExpanded(true)}>
+                  Expand
+                </s-button>
+                <s-button onClick={handleDownloadPdf}>
+                  Download
+                </s-button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "8px",
+                  marginBottom: "8px",
+                }}
+              >
+                <s-button onClick={() => setPdfExpanded(false)}>
+                  Collapse
+                </s-button>
+                <s-button onClick={handleDownloadPdf}>
+                  Download
+                </s-button>
+              </div>
+              <iframe
+                src={pdfDataUrl}
+                style={{
+                  width: "100%",
+                  height: "800px",
+                  border: "1px solid #e1e3e5",
+                  borderRadius: "8px",
+                }}
+                title={`PDF preview for ${po.po_number}`}
+              />
+            </>
+          )}
+        </s-section>
+      )}
 
       {isDraft && (
         <s-section heading="Send this order" slot="aside">

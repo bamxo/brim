@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useActionData, useLoaderData, useSubmit } from "react-router";
+import { useActionData, useLoaderData, useNavigate, useSubmit } from "react-router";
 import TitleBar from "../components/Header/TitleBar";
 
 type Supplier = { id: string; name: string };
@@ -11,6 +11,7 @@ type Product = {
   image_url: string | null;
   current_stock: number;
   shopify_variant_id: string;
+  unit_cost: number | null;
 };
 type Location = { id: string; name: string };
 
@@ -26,7 +27,7 @@ type LineItem = {
 
 type LoaderData = {
   suppliers: Supplier[];
-  products: Product[];
+  supplierProducts: Record<string, Product[]>;
   locations: Location[];
   currency: string;
 };
@@ -39,9 +40,10 @@ function productLabel(p: Product): string {
 }
 
 export default function NewPurchaseOrderPage() {
-  const { suppliers, products, locations, currency } = useLoaderData<LoaderData>();
+  const { suppliers, supplierProducts, locations, currency } = useLoaderData<LoaderData>();
   const actionData = useActionData<{ errors?: Record<string, string | undefined> }>();
   const submit = useSubmit();
+  const navigate = useNavigate();
   const errors = (actionData?.errors ?? {}) as Record<string, string | undefined>;
 
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
@@ -52,6 +54,7 @@ export default function NewPurchaseOrderPage() {
   const [hoveredDeleteId, setHoveredDeleteId] = useState<string | null>(null);
   const [locationSearch, setLocationSearch] = useState("");
   const [selectedLocationName, setSelectedLocationName] = useState("");
+  const [selectedLocationId, setSelectedLocationId] = useState("");
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [locationDropdownPos, setLocationDropdownPos] = useState({ top: 0, left: 0, width: 0 });
 
@@ -74,7 +77,11 @@ export default function NewPurchaseOrderPage() {
       | (HTMLElement & { value: string })
       | null;
     if (!el) return;
-    const handler = () => setSelectedSupplierId((el as HTMLElement & { value: string }).value);
+    const handler = () => {
+      setSelectedSupplierId((el as HTMLElement & { value: string }).value);
+      setLineItems([]);
+      setProductSearch("");
+    };
     el.addEventListener("change", handler);
     return () => el.removeEventListener("change", handler);
   }, []);
@@ -163,6 +170,7 @@ export default function NewPurchaseOrderPage() {
 
   const handleSelectLocation = useCallback((loc: Location) => {
     setSelectedLocationName(loc.name);
+    setSelectedLocationId(loc.id);
     setLocationSearch(loc.name);
     setShowLocationDropdown(false);
     const el = document.getElementById("location-search") as
@@ -183,7 +191,7 @@ export default function NewPurchaseOrderPage() {
           variant_title: product.variant_title,
           sku: product.sku,
           quantity: 1,
-          unit_cost: null,
+          unit_cost: product.unit_cost ?? null,
         },
       ]);
       setProductSearch("");
@@ -245,6 +253,7 @@ export default function NewPurchaseOrderPage() {
     fd.append("intent", intent);
     fd.append("supplier_id", get("supplier_id"));
     fd.append("delivery_location", selectedLocationName);
+    fd.append("delivery_location_id", selectedLocationId);
     fd.append("requested_delivery_date", get("requested_delivery_date"));
     fd.append("payment_terms", get("payment_terms"));
     fd.append("notes", get("notes"));
@@ -253,7 +262,11 @@ export default function NewPurchaseOrderPage() {
     submit(fd, { method: "post" });
   };
 
-  const availableProducts = products.filter(
+  const supplierProductList = selectedSupplierId
+    ? (supplierProducts[selectedSupplierId] ?? [])
+    : [];
+
+  const availableProducts = supplierProductList.filter(
     (p) => !lineItems.some((li) => li.product_id === p.id),
   );
 
@@ -553,6 +566,32 @@ export default function NewPurchaseOrderPage() {
             boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
           }}
         >
+          <div
+            onMouseDown={() => {
+              setShowProductDropdown(false);
+              navigate(`/app/suppliers/${selectedSupplierId}#product-catalog`);
+            }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "10px 12px",
+              fontSize: "14px",
+              color: "#2c6ecb",
+              cursor: "pointer",
+              borderBottom: "1px solid #e1e3e5",
+              fontWeight: 500,
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.background = "#f6f6f7";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = "#fff";
+            }}
+          >
+            <s-icon type="plus" size="small" />
+            Add a product to this supplier
+          </div>
           {filteredProducts.length > 0 ? (
             filteredProducts.map((p) => (
               <div
@@ -583,7 +622,7 @@ export default function NewPurchaseOrderPage() {
                 textAlign: "center",
               }}
             >
-              No products found
+              No products linked to this supplier
             </div>
           )}
         </div>
