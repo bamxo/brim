@@ -23,6 +23,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const email = String(formData.get("email") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
+  const address1 = String(formData.get("address1") ?? "").trim() || null;
+  const address2 = String(formData.get("address2") ?? "").trim() || null;
+  const city = String(formData.get("city") ?? "").trim() || null;
+  const province = String(formData.get("province") ?? "").trim() || null;
+  const zip = String(formData.get("zip") ?? "").trim() || null;
+  const country = String(formData.get("country") ?? "").trim() || null;
 
   if (!name) return { errors: { name: "Name is required" } };
   if (!email) return { errors: { email: "Email is required" } };
@@ -32,6 +38,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     email,
     phone,
     notes,
+    address1,
+    address2,
+    city,
+    province,
+    zip,
+    country,
   });
 
   if (error) return { errors: { form: error } };

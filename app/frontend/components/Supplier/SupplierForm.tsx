@@ -6,6 +6,12 @@ type Supplier = {
   email: string;
   phone: string | null;
   notes: string | null;
+  address1: string | null;
+  address2: string | null;
+  city: string | null;
+  province: string | null;
+  zip: string | null;
+  country: string | null;
 };
 
 type Props = {
@@ -39,6 +45,12 @@ export default function SupplierForm({ supplier, errors, actionData }: Props) {
     fd.append("email", get("email"));
     fd.append("phone", get("phone"));
     fd.append("notes", get("notes"));
+    fd.append("address1", get("address1"));
+    fd.append("address2", get("address2"));
+    fd.append("city", get("city"));
+    fd.append("province", get("province"));
+    fd.append("zip", get("zip"));
+    fd.append("country", get("country"));
     submit(fd, { method: "post" });
   };
 
@@ -73,6 +85,40 @@ export default function SupplierForm({ supplier, errors, actionData }: Props) {
             value={supplier.notes ?? ""}
             help-text="Internal notes about this supplier"
           />
+          <s-text-field
+            name="address1"
+            label="Address line 1"
+            value={supplier.address1 ?? ""}
+          />
+          <s-text-field
+            name="address2"
+            label="Address line 2"
+            value={supplier.address2 ?? ""}
+          />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <s-text-field
+              name="city"
+              label="City"
+              value={supplier.city ?? ""}
+            />
+            <s-text-field
+              name="province"
+              label="State / Province"
+              value={supplier.province ?? ""}
+            />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <s-text-field
+              name="zip"
+              label="ZIP / Postal code"
+              value={supplier.zip ?? ""}
+            />
+            <s-text-field
+              name="country"
+              label="Country"
+              value={supplier.country ?? ""}
+            />
+          </div>
         </s-stack>
       </form>
 

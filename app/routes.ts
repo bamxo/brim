@@ -13,6 +13,7 @@ export default [
     route("purchase-orders",      "backend/purchase-orders/views.tsx"),
     route("purchase-orders/new",  "backend/purchase-orders/new.views.tsx"),
     route("purchase-orders/:id",  "backend/purchase-orders/detail.views.tsx"),
+    route("purchase-orders/:id/pdf", "backend/purchase-orders/pdf.views.tsx"),
     route("suppliers",            "backend/suppliers/views.tsx"),
     route("suppliers/new",        "backend/suppliers/new.views.tsx"),
     route("suppliers/:id",        "backend/suppliers/detail.views.tsx"),
@@ -29,6 +30,7 @@ export default [
   route("webhooks/inventory-levels/update",  "backend/webhooks/inventory-levels.ts"),
   route("webhooks/products/create",          "backend/webhooks/products-create.ts"),
   route("webhooks/products/delete",          "backend/webhooks/products-delete.ts"),
+  route("webhooks/products/update",          "backend/webhooks/products-update.ts"),
   route("webhooks/inbound-email",            "backend/webhooks/inbound-email.ts"),
 
   // ── Auth (Shopify OAuth — keep as-is) ──────────────────────────────────

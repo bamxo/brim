@@ -35,7 +35,7 @@ export async function getSupplierById(shopId: string, supplierId: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("suppliers")
-    .select("id, name, email, phone, notes")
+    .select("id, name, email, phone, notes, address1, address2, city, province, zip, country")
     .eq("id", supplierId)
     .eq("shop_id", shopId)
     .single();
@@ -47,6 +47,12 @@ export async function getSupplierById(shopId: string, supplierId: string) {
     email: string;
     phone: string | null;
     notes: string | null;
+    address1: string | null;
+    address2: string | null;
+    city: string | null;
+    province: string | null;
+    zip: string | null;
+    country: string | null;
   };
 }
 
@@ -57,6 +63,12 @@ export async function createSupplier(
     email: string;
     phone: string | null;
     notes: string | null;
+    address1: string | null;
+    address2: string | null;
+    city: string | null;
+    province: string | null;
+    zip: string | null;
+    country: string | null;
   },
 ) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -78,6 +90,12 @@ export async function updateSupplier(
     email: string;
     phone: string | null;
     notes: string | null;
+    address1: string | null;
+    address2: string | null;
+    city: string | null;
+    province: string | null;
+    zip: string | null;
+    country: string | null;
   },
 ) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

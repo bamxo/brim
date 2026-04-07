@@ -26,15 +26,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const shop = await getShopByDomain(session.shop);
 
-  const [suppliers, products, locationsResponse, shopRow] = await Promise.all([
+  const [suppliers, reorderRules, locationsResponse, shopRow] = await Promise.all([
     getActiveSuppliersMinimal(shop.id),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any)
-      .from("products")
-      .select("id, title, variant_title, sku, image_url, current_stock, shopify_variant_id")
+      .from("reorder_rules")
+      .select(
+        `
+        primary_supplier_id, unit_cost,
+        product:products (id, title, variant_title, sku, image_url, current_stock, shopify_variant_id)
+      `,
+      )
       .eq("shop_id", shop.id)
-      .eq("is_active", true)
-      .order("title"),
+      .eq("is_active", true),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (admin.graphql as any)(LOCATIONS_QUERY),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -51,9 +55,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     name: string;
   }[];
 
-  return {
-    suppliers,
-    products: (products.data ?? []) as {
+  type RuleRow = {
+    primary_supplier_id: string;
+    unit_cost: number | null;
+    product: {
       id: string;
       title: string;
       variant_title: string | null;
@@ -61,7 +66,37 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       image_url: string | null;
       current_stock: number;
       shopify_variant_id: string;
-    }[],
+    } | null;
+  };
+
+  const supplierProducts: Record<
+    string,
+    {
+      id: string;
+      title: string;
+      variant_title: string | null;
+      sku: string | null;
+      image_url: string | null;
+      current_stock: number;
+      shopify_variant_id: string;
+      unit_cost: number | null;
+    }[]
+  > = {};
+
+  for (const rule of (reorderRules.data ?? []) as RuleRow[]) {
+    if (!rule.product) continue;
+    const sid = rule.primary_supplier_id;
+    if (!supplierProducts[sid]) supplierProducts[sid] = [];
+    supplierProducts[sid].push({ ...rule.product, unit_cost: rule.unit_cost });
+  }
+
+  for (const list of Object.values(supplierProducts)) {
+    list.sort((a, b) => a.title.localeCompare(b.title));
+  }
+
+  return {
+    suppliers,
+    supplierProducts,
     locations,
     currency: (shopRow?.data?.currency as string) ?? "USD",
   };
@@ -75,6 +110,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const supplierId = String(formData.get("supplier_id") ?? "").trim();
   const lineItemsJson = String(formData.get("line_items") ?? "[]");
   const deliveryLocation = String(formData.get("delivery_location") ?? "").trim();
+  const deliveryLocationId = String(formData.get("delivery_location_id") ?? "").trim() || null;
   const requestedDeliveryDate = String(formData.get("requested_delivery_date") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
@@ -127,6 +163,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       total_amount: totalAmount,
       requested_delivery_date: requestedDeliveryDate,
       delivery_location: deliveryLocation,
+      delivery_location_id: deliveryLocationId,
       notes,
     })
     .select("id")

@@ -17,6 +17,12 @@ export default function NewSupplierPage() {
     fd.append("email", get("email"));
     fd.append("phone", get("phone"));
     fd.append("notes", get("notes"));
+    fd.append("address1", get("address1"));
+    fd.append("address2", get("address2"));
+    fd.append("city", get("city"));
+    fd.append("province", get("province"));
+    fd.append("zip", get("zip"));
+    fd.append("country", get("country"));
     submit(fd, { method: "post" });
   };
 
@@ -54,6 +60,34 @@ export default function NewSupplierPage() {
               label="Notes"
               help-text="Internal notes about this supplier"
             />
+            <s-text-field
+              name="address1"
+              label="Address line 1"
+            />
+            <s-text-field
+              name="address2"
+              label="Address line 2"
+            />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <s-text-field
+                name="city"
+                label="City"
+              />
+              <s-text-field
+                name="province"
+                label="State / Province"
+              />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <s-text-field
+                name="zip"
+                label="ZIP / Postal code"
+              />
+              <s-text-field
+                name="country"
+                label="Country"
+              />
+            </div>
           </s-stack>
         </form>
 

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useActionData, useFetcher, useLoaderData, useSubmit } from "react-router";
+import { useEffect, useState } from "react";
+import { useActionData, useFetcher, useLoaderData, useLocation, useSubmit } from "react-router";
 import TitleBar from "../components/Header/TitleBar";
 import SupplierForm from "../components/Supplier/SupplierForm";
 import ProductCatalog, { type AssignedProduct, type CustomItem, type Product } from "../components/Supplier/ProductCatalog";
@@ -13,6 +13,12 @@ type LoaderData = {
     email: string;
     phone: string | null;
     notes: string | null;
+    address1: string | null;
+    address2: string | null;
+    city: string | null;
+    province: string | null;
+    zip: string | null;
+    country: string | null;
   };
   assignedProducts: AssignedProduct[];
   allProducts: Product[];
@@ -40,8 +46,18 @@ export default function SupplierDetailPage() {
   const productFetcher = useFetcher<ActionData>();
   const customItemFetcher = useFetcher<ActionData>();
 
+  const location = useLocation();
   const [editingItem, setEditingItem] = useState<CustomItem | null>(null);
   const [pendingStoreProduct, setPendingStoreProduct] = useState<PendingStoreProduct | null>(null);
+
+  useEffect(() => {
+    if (location.hash === "#product-catalog") {
+      const el = document.getElementById("product-catalog");
+      if (el) {
+        setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+      }
+    }
+  }, [location.hash]);
 
   const errors = (actionData?.errors ?? {}) as Record<string, string | undefined>;
 
@@ -169,19 +185,21 @@ export default function SupplierDetailPage() {
         actionData={actionData}
       />
 
-      <ProductCatalog
-        allProducts={allProducts}
-        assignedProducts={assignedProducts}
-        customItems={customItems}
-        lastSyncedAt={lastSyncedAt}
-        productError={productFetcher.data?.productError}
-        customItemError={customItemFetcher.data?.customItemError}
-        onAddProduct={handleAddProduct}
-        onRemoveProduct={handleRemoveProduct}
-        onAddCustomItem={showAddCustomModal}
-        onEditCustomItem={showEditCustomModal}
-        onRemoveCustomItem={handleRemoveCustomItem}
-      />
+      <div id="product-catalog">
+        <ProductCatalog
+          allProducts={allProducts}
+          assignedProducts={assignedProducts}
+          customItems={customItems}
+          lastSyncedAt={lastSyncedAt}
+          productError={productFetcher.data?.productError}
+          customItemError={customItemFetcher.data?.customItemError}
+          onAddProduct={handleAddProduct}
+          onRemoveProduct={handleRemoveProduct}
+          onAddCustomItem={showAddCustomModal}
+          onEditCustomItem={showEditCustomModal}
+          onRemoveCustomItem={handleRemoveCustomItem}
+        />
+      </div>
 
       <DeleteModal
         modalId="delete-supplier-modal"
