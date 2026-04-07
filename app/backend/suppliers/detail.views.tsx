@@ -93,8 +93,12 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   // ── Remove a product from this supplier ──────────────────────────
   if (intent === "remove-product") {
     const productId = String(formData.get("product_id"));
-    const { error } = await deactivateReorderRule(shop.id, productId);
-    if (error) return { productError: error };
+    const [ruleResult, skuResult] = await Promise.all([
+      deactivateReorderRule(shop.id, productId),
+      updateProductSku(shop.id, productId, null),
+    ]);
+    if (ruleResult.error) return { productError: ruleResult.error };
+    if (skuResult.error) return { productError: skuResult.error };
     return { productOk: true };
   }
 

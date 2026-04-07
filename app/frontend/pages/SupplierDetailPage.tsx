@@ -4,7 +4,7 @@ import TitleBar from "../components/Header/TitleBar";
 import SupplierForm from "../components/Supplier/SupplierForm";
 import ProductCatalog, { type AssignedProduct, type CustomItem, type Product } from "../components/Supplier/ProductCatalog";
 import DeleteModal from "../components/Supplier/DeleteSupplierModal";
-import AddProductModal, { type CustomItemFormData } from "../components/Supplier/AddProductModal";
+import AddProductModal, { type CustomItemFormData, type ExistingSku } from "../components/Supplier/AddProductModal";
 
 type LoaderData = {
   supplier: {
@@ -44,6 +44,15 @@ export default function SupplierDetailPage() {
   const [pendingStoreProduct, setPendingStoreProduct] = useState<PendingStoreProduct | null>(null);
 
   const errors = (actionData?.errors ?? {}) as Record<string, string | undefined>;
+
+  const existingSkus: ExistingSku[] = [
+    ...assignedProducts
+      .filter((p) => p.sku)
+      .map((p) => ({ sku: p.sku!, productName: p.title })),
+    ...customItems
+      .filter((c) => c.sku)
+      .map((c) => ({ sku: c.sku!, productName: c.name })),
+  ];
 
   const openModal = () => {
     setTimeout(() => {
@@ -184,6 +193,7 @@ export default function SupplierDetailPage() {
         modalId="add-product-modal"
         editingItem={editingItem}
         storeProduct={pendingStoreProduct}
+        existingSkus={existingSkus}
         onSubmit={handleModalSubmit}
       />
     </TitleBar>

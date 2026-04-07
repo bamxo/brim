@@ -152,11 +152,13 @@ function StoreProductsTab({
     };
   });
 
-  const filtered = merged.filter(
-    (p) =>
-      p.title.toLowerCase().includes(search.toLowerCase()) ||
-      (p.sku ?? "").toLowerCase().includes(search.toLowerCase()),
-  );
+  const filtered = merged
+    .filter(
+      (p) =>
+        p.title.toLowerCase().includes(search.toLowerCase()) ||
+        (p.sku ?? "").toLowerCase().includes(search.toLowerCase()),
+    )
+    .sort((a, b) => Number(b.isAssigned) - Number(a.isAssigned));
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
