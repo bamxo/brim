@@ -10,6 +10,7 @@ type Rule = {
 
 type Props = {
   rule: Rule | null;
+  productSku?: string | null;
   suppliers: Supplier[];
   errors: Record<string, string | undefined>;
   onSave: () => void;
@@ -20,6 +21,7 @@ type Props = {
 
 export default function ReorderRuleForm({
   rule,
+  productSku,
   suppliers,
   errors,
   onSave,
@@ -72,6 +74,12 @@ export default function ReorderRuleForm({
             />
           </div>
 
+          <s-text-field
+            name="sku"
+            label="SKU"
+            value={productSku ?? ""}
+            help-text="Stock-keeping unit identifier for this product"
+          />
           <s-number-field
             name="unit_cost"
             label="Unit cost"

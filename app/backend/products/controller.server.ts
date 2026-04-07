@@ -111,6 +111,18 @@ export async function getReorderRuleForProduct(shopId: string, productId: string
   return data ?? null;
 }
 
+export async function updateProductSku(shopId: string, productId: string, sku: string | null) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("products")
+    .update({ sku })
+    .eq("id", productId)
+    .eq("shop_id", shopId);
+
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
 export async function upsertReorderRule(payload: {
   shop_id: string;
   product_id: string | undefined;
@@ -208,7 +220,7 @@ export async function getProductsBySupplier(shopId: string, supplierId: string) 
     .from("reorder_rules")
     .select(
       `
-      reorder_point, reorder_quantity,
+      reorder_point, reorder_quantity, unit_cost,
       product:products (id, title, variant_title, sku, current_stock, image_url)
     `,
     )
@@ -220,6 +232,7 @@ export async function getProductsBySupplier(shopId: string, supplierId: string) 
   return ((data ?? []) as {
     reorder_point: number;
     reorder_quantity: number;
+    unit_cost: number | null;
     product: {
       id: string;
       title: string;
@@ -234,6 +247,7 @@ export async function getProductsBySupplier(shopId: string, supplierId: string) 
       ...r.product!,
       reorder_point: r.reorder_point,
       reorder_quantity: r.reorder_quantity,
+      unit_cost: r.unit_cost,
     }));
 }
 

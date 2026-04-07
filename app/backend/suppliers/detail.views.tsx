@@ -11,6 +11,10 @@ import {
   getSupplierById,
   updateSupplier,
   deleteSupplier,
+  getCustomItemsBySupplier,
+  createCustomItem,
+  updateCustomItem,
+  deleteCustomItem,
 } from "./controller.server";
 import {
   getProductsBySupplier,
@@ -18,6 +22,7 @@ import {
   getLastSyncedAt,
   upsertReorderRule,
   deactivateReorderRule,
+  updateProductSku,
 } from "../products/controller.server";
 import { syncProductsForShop } from "../products/sync.server";
 
@@ -25,16 +30,18 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = await getShopByDomain(session.shop);
 
-  const [supplier, assignedProducts, allProducts, lastSyncedAt] = await Promise.all([
-    getSupplierById(shop.id, params.id!),
-    getProductsBySupplier(shop.id, params.id!),
-    getAllProductsForShop(shop.id),
-    getLastSyncedAt(shop.id),
-  ]);
+  const [supplier, assignedProducts, allProducts, lastSyncedAt, customItems] =
+    await Promise.all([
+      getSupplierById(shop.id, params.id!),
+      getProductsBySupplier(shop.id, params.id!),
+      getAllProductsForShop(shop.id),
+      getLastSyncedAt(shop.id),
+      getCustomItemsBySupplier(shop.id, params.id!),
+    ]);
 
   if (!supplier) throw new Response("Supplier not found", { status: 404 });
 
-  return { supplier, assignedProducts, allProducts, lastSyncedAt };
+  return { supplier, assignedProducts, allProducts, lastSyncedAt, customItems };
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
@@ -60,17 +67,26 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   // ── Assign a product to this supplier ────────────────────────────
   if (intent === "add-product") {
     const productId = String(formData.get("product_id"));
-    const { error } = await upsertReorderRule({
-      shop_id: shop.id,
-      product_id: productId,
-      primary_supplier_id: params.id!,
-      backup_supplier_id: null,
-      reorder_point: 0,
-      reorder_quantity: 1,
-      unit_cost: null,
-      is_active: true,
-    });
-    if (error) return { productError: error };
+    const rawCost = formData.get("unit_cost");
+    const unitCost = rawCost ? parseFloat(String(rawCost)) : null;
+    const sku = String(formData.get("sku") ?? "").trim() || null;
+
+    const [ruleResult, skuResult] = await Promise.all([
+      upsertReorderRule({
+        shop_id: shop.id,
+        product_id: productId,
+        primary_supplier_id: params.id!,
+        backup_supplier_id: null,
+        reorder_point: 0,
+        reorder_quantity: 1,
+        unit_cost: unitCost,
+        is_active: true,
+      }),
+      sku ? updateProductSku(shop.id, productId, sku) : Promise.resolve({ error: null }),
+    ]);
+
+    if (ruleResult.error) return { productError: ruleResult.error };
+    if (skuResult.error) return { productError: skuResult.error };
     return { productOk: true };
   }
 
@@ -80,6 +96,47 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     const { error } = await deactivateReorderRule(shop.id, productId);
     if (error) return { productError: error };
     return { productOk: true };
+  }
+
+  // ── Add custom catalog item ──────────────────────────────────────
+  if (intent === "add-custom-item") {
+    const name = String(formData.get("name") ?? "").trim();
+    if (!name) return { customItemError: "Product name is required" };
+    const sku = String(formData.get("sku") ?? "").trim() || null;
+    const rawCost = formData.get("unit_cost");
+    const unitCost = rawCost ? parseFloat(String(rawCost)) : null;
+    const { error } = await createCustomItem(shop.id, params.id!, {
+      name,
+      sku,
+      unit_cost: unitCost,
+    });
+    if (error) return { customItemError: error };
+    return { customItemOk: true };
+  }
+
+  // ── Edit custom catalog item ─────────────────────────────────────
+  if (intent === "edit-custom-item") {
+    const itemId = String(formData.get("item_id"));
+    const name = String(formData.get("name") ?? "").trim();
+    if (!name) return { customItemError: "Product name is required" };
+    const sku = String(formData.get("sku") ?? "").trim() || null;
+    const rawCost = formData.get("unit_cost");
+    const unitCost = rawCost ? parseFloat(String(rawCost)) : null;
+    const { error } = await updateCustomItem(shop.id, itemId, {
+      name,
+      sku,
+      unit_cost: unitCost,
+    });
+    if (error) return { customItemError: error };
+    return { customItemOk: true };
+  }
+
+  // ── Remove custom catalog item ───────────────────────────────────
+  if (intent === "remove-custom-item") {
+    const itemId = String(formData.get("item_id"));
+    const { error } = await deleteCustomItem(shop.id, itemId);
+    if (error) return { customItemError: error };
+    return { customItemOk: true };
   }
 
   // ── Unknown intent ──────────────────────────────────────────────
