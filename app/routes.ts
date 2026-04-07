@@ -11,6 +11,7 @@ export default [
     route("products",             "backend/products/views.tsx"),
     route("products/:id",         "backend/products/detail.views.tsx"),
     route("purchase-orders",      "backend/purchase-orders/views.tsx"),
+    route("purchase-orders/new",  "backend/purchase-orders/new.views.tsx"),
     route("purchase-orders/:id",  "backend/purchase-orders/detail.views.tsx"),
     route("suppliers",            "backend/suppliers/views.tsx"),
     route("suppliers/new",        "backend/suppliers/new.views.tsx"),

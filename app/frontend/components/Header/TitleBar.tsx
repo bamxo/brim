@@ -2,11 +2,12 @@ type Breadcrumb = { label: string; href: string };
 
 type TitleBarProps = {
   heading: string;
+  subtitle?: string;
   breadcrumbs?: Breadcrumb[];
   children?: React.ReactNode;
 };
 
-export default function TitleBar({ heading, breadcrumbs, children }: TitleBarProps) {
+export default function TitleBar({ heading, subtitle, breadcrumbs, children }: TitleBarProps) {
   return (
     <s-page heading={heading}>
       {breadcrumbs?.map((crumb, i) => {
@@ -17,6 +18,9 @@ export default function TitleBar({ heading, breadcrumbs, children }: TitleBarPro
           </s-link>
         );
       })}
+      {subtitle && (
+        <s-paragraph color="subdued">{subtitle}</s-paragraph>
+      )}
       {children}
     </s-page>
   );
