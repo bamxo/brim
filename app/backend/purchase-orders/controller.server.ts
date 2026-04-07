@@ -15,7 +15,7 @@ type ReorderCandidate = {
   shopify_variant_id: string;
 };
 
-async function generatePoNumber(shopId: string): Promise<string> {
+export async function generatePoNumber(shopId: string): Promise<string> {
   const year = new Date().getFullYear();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

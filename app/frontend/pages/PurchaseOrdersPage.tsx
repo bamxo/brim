@@ -111,10 +111,10 @@ export default function PurchaseOrdersPage() {
       {purchaseOrders.length === 0 ? (
         <s-section>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "20px", padding: "48px 16px", textAlign: "center" }}>
-            <div style={{ width: "130px", height: "130px", borderRadius: "50%", background: "#f1f1f1", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-              <div style={{ transform: "scale(3.5)", transformOrigin: "center" }}>
-                <s-icon type="import" color="subdued" />
-              </div>
+            <div style={{ width: "130px", height: "130px", borderRadius: "50%", background: "#f1f1f1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="80" height="80" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h11A1.5 1.5 0 0 1 17 4.5v11a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 15.5v-11Zm1.5 0v7h3.25a.75.75 0 0 1 .75.75 1.5 1.5 0 0 0 3 0 .75.75 0 0 1 .75-.75h3.25v-7h-11Zm11 8.5h-2.55a3 3 0 0 1-5.9 0H4.5v2.5h11V13Z" fill="#5C5F62" />
+              </svg>
             </div>
             <h2 style={{ margin: 0, fontSize: "22px", fontWeight: "600", color: "#1a1a1a" }}>
               No purchase orders yet
