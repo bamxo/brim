@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useNavigate } from "react-router";
 
 type SyncResult = { synced: number; error: string | null };
+type CreatedPO = { poId: string; poNumber: string; productNames: string[] };
+type ReorderResult = { createdPOs: CreatedPO[]; linesAdded: number };
 
 type Props = {
   /** ISO timestamp of the last sync. Updates optimistically after a successful sync. */
@@ -25,7 +27,8 @@ function formatSyncDate(iso: string): string {
 }
 
 export default function SyncProductsButton({ lastSyncedAt, action }: Props) {
-  const fetcher = useFetcher<{ syncResult?: SyncResult }>();
+  const fetcher = useFetcher<{ syncResult?: SyncResult; reorderResult?: ReorderResult }>();
+  const navigate = useNavigate();
   const isSyncing = fetcher.state !== "idle";
 
   const [displayedSyncedAt, setDisplayedSyncedAt] = useState(lastSyncedAt);
@@ -47,6 +50,26 @@ export default function SyncProductsButton({ lastSyncedAt, action }: Props) {
     fd.append("intent", "sync-products");
     fetcher.submit(fd, { method: "post", action });
   };
+
+  // Auto-navigate to the PO when a reorder is triggered
+  useEffect(() => {
+    const pos = fetcher.data?.reorderResult?.createdPOs;
+    if (!pos || pos.length === 0) return;
+
+    const productNames = pos.flatMap((po) => po.productNames);
+    const summary =
+      productNames.length <= 3
+        ? productNames.join(", ")
+        : `${productNames.slice(0, 3).join(", ")} and ${productNames.length - 3} more`;
+
+    shopify.toast.show(`Reorder triggered — ${summary}`);
+
+    if (pos.length === 1) {
+      navigate(`/app/purchase-orders/${pos[0].poId}`);
+    } else {
+      navigate("/app/purchase-orders");
+    }
+  }, [fetcher.data, navigate]);
 
   return (
     <>

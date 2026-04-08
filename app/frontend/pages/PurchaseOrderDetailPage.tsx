@@ -122,64 +122,75 @@ export default function PurchaseOrderDetailPage() {
       </s-section>
 
       <s-section heading="Line items">
-        <form method="post">
-          <input type="hidden" name="intent" value="update-quantities" />
-          <s-table>
-            <s-table-header-row>
-              <s-table-header>Product</s-table-header>
-              <s-table-header>SKU</s-table-header>
-              <s-table-header>Qty</s-table-header>
-              <s-table-header>Unit cost</s-table-header>
-              <s-table-header>Line total</s-table-header>
-            </s-table-header-row>
-            <s-table-body>
-              {po.purchase_order_line_items.map((line) => (
-                <s-table-row key={line.id}>
-                  <s-table-cell>
-                    {line.product_name}
-                    {line.variant_title ? ` — ${line.variant_title}` : ""}
-                  </s-table-cell>
-                  <s-table-cell>{line.sku ?? "—"}</s-table-cell>
-                  <s-table-cell>
-                    <input type="hidden" name="line_id" value={line.id} />
-                    {isDraft ? (
-                      <s-number-field
-                        name="quantity"
-                        label="Quantity"
-                        label-hidden
-                        min={0}
-                        value={String(line.quantity_ordered)}
-                      />
-                    ) : (
-                      String(line.quantity_ordered)
-                    )}
-                  </s-table-cell>
-                  <s-table-cell>
-                    {line.unit_cost != null
-                      ? new Intl.NumberFormat("en-US", {
-                          style: "currency",
-                          currency: po.currency,
-                        }).format(line.unit_cost)
-                      : "—"}
-                  </s-table-cell>
-                  <s-table-cell>
-                    {line.line_total != null
-                      ? new Intl.NumberFormat("en-US", {
-                          style: "currency",
-                          currency: po.currency,
-                        }).format(line.line_total)
-                      : "—"}
-                  </s-table-cell>
-                </s-table-row>
-              ))}
-            </s-table-body>
-          </s-table>
-          {isDraft && (
-            <s-stack direction="inline" gap="base">
-              <s-button type="submit">Update quantities</s-button>
-            </s-stack>
-          )}
-        </form>
+        <s-table>
+          <s-table-header-row>
+            <s-table-header>Product</s-table-header>
+            <s-table-header>SKU</s-table-header>
+            <s-table-header>Qty</s-table-header>
+            <s-table-header>Unit cost</s-table-header>
+            <s-table-header>Line total</s-table-header>
+          </s-table-header-row>
+          <s-table-body>
+            {po.purchase_order_line_items.map((line) => (
+              <s-table-row key={line.id}>
+                <s-table-cell>
+                  {line.product_name}
+                  {line.variant_title ? ` — ${line.variant_title}` : ""}
+                </s-table-cell>
+                <s-table-cell>{line.sku ?? "—"}</s-table-cell>
+                <s-table-cell>
+                  {isDraft ? (
+                    <s-number-field
+                      name={`qty-${line.id}`}
+                      label="Quantity"
+                      label-hidden
+                      min={0}
+                      value={String(line.quantity_ordered)}
+                    />
+                  ) : (
+                    String(line.quantity_ordered)
+                  )}
+                </s-table-cell>
+                <s-table-cell>
+                  {line.unit_cost != null
+                    ? new Intl.NumberFormat("en-US", {
+                        style: "currency",
+                        currency: po.currency,
+                      }).format(line.unit_cost)
+                    : "—"}
+                </s-table-cell>
+                <s-table-cell>
+                  {line.line_total != null
+                    ? new Intl.NumberFormat("en-US", {
+                        style: "currency",
+                        currency: po.currency,
+                      }).format(line.line_total)
+                    : "—"}
+                </s-table-cell>
+              </s-table-row>
+            ))}
+          </s-table-body>
+        </s-table>
+        {isDraft && (
+          <s-stack direction="inline" gap="base">
+            <s-button
+              onClick={() => {
+                const fd = new FormData();
+                fd.append("intent", "update-quantities");
+                for (const line of po.purchase_order_line_items) {
+                  fd.append("line_id", line.id);
+                  const input = document.querySelector<HTMLInputElement>(
+                    `[name="qty-${line.id}"]`,
+                  );
+                  fd.append("quantity", input?.value ?? String(line.quantity_ordered));
+                }
+                submit(fd, { method: "post" });
+              }}
+            >
+              Update quantities
+            </s-button>
+          </s-stack>
+        )}
       </s-section>
 
       {pdfDataUrl && (

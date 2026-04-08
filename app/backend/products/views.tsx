@@ -8,6 +8,8 @@ import { authenticate } from "../../shopify.server";
 import { getShopByDomain } from "../shops/controller.server";
 import { getProductsWithRules, getLastSyncedAt } from "./controller.server";
 import { syncProductsForShop } from "./sync.server";
+import { generateDraftPOs } from "../purchase-orders/controller.server";
+import { dispatchReorderNotification } from "../notifications/controller.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -26,7 +28,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (formData.get("intent") !== "sync-products") return null;
   const { synced, error } = await syncProductsForShop(admin, shop.id);
   if (error) return { syncResult: { synced: 0, error } };
-  return { syncResult: { synced, error: null } };
+
+  // After syncing fresh stock levels, check for reorder triggers
+  const reorderResult = await generateDraftPOs(shop.id);
+  for (const po of reorderResult.createdPOs) {
+    await dispatchReorderNotification({
+      shopId: shop.id,
+      poId: po.poId,
+      poNumber: po.poNumber,
+      productNames: po.productNames,
+    });
+  }
+
+  return {
+    syncResult: { synced, error: null },
+    reorderResult: {
+      createdPOs: reorderResult.createdPOs,
+      linesAdded: reorderResult.linesAdded,
+    },
+  };
 };
 
 export { default } from "../../frontend/pages/ProductsPage";

@@ -11,6 +11,7 @@ export async function getShopSettings(shopId: string) {
   return data as {
     notification_channel: string | null;
     default_send_method: string | null;
+    reorder_behavior: string | null;
     critical_stock_threshold: number | null;
     supplier_chase_days: number | null;
     delivery_reminder_days_before: number | null;
@@ -22,6 +23,7 @@ export async function upsertShopSettings(
   payload: {
     notification_channel: FormDataEntryValue | null;
     default_send_method: FormDataEntryValue | null;
+    reorder_behavior: FormDataEntryValue | null;
     critical_stock_threshold: number;
     supplier_chase_days: number;
     delivery_reminder_days_before: number;
