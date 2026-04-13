@@ -24,7 +24,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       *,
       suppliers (id, name, email, phone, address1, address2, city, province, zip, country),
       purchase_order_line_items (
-        id, product_name, variant_title, sku,
+        id, product_id, shopify_variant_id, product_name, variant_title, sku,
         quantity_ordered, unit_cost, line_total, status
       )
     `,
@@ -34,6 +34,45 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     .single();
 
   if (error || !po) throw new Response("Purchase order not found", { status: 404 });
+
+  // When draft, fetch supplier products so the user can add line items
+  let supplierProducts: {
+    id: string;
+    title: string;
+    variant_title: string | null;
+    sku: string | null;
+    shopify_variant_id: string;
+    unit_cost: number | null;
+  }[] = [];
+
+  if (po.status === "draft" && po.supplier_id) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: rules } = await (supabase as any)
+      .from("reorder_rules")
+      .select(
+        `
+        unit_cost,
+        products!inner (id, title, variant_title, sku, shopify_variant_id)
+      `,
+      )
+      .eq("shop_id", shop.id)
+      .eq("primary_supplier_id", po.supplier_id)
+      .eq("is_active", true);
+
+    supplierProducts = (rules ?? [])
+      .filter((r: any) => r.products)
+      .map((r: any) => ({
+        id: r.products.id,
+        title: r.products.title,
+        variant_title: r.products.variant_title,
+        sku: r.products.sku,
+        shopify_variant_id: r.products.shopify_variant_id,
+        unit_cost: r.unit_cost,
+      }))
+      .sort((a: { title: string }, b: { title: string }) =>
+        a.title.localeCompare(b.title),
+      );
+  }
 
   // Generate PDF preview as base64 data URL
   let pdfDataUrl: string | null = null;
@@ -114,7 +153,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     // PDF generation failure should not block page load
   }
 
-  return { po, pdfDataUrl };
+  return { po, pdfDataUrl, supplierProducts };
 };
 
 const SHOP_BILLING_QUERY = `#graphql
@@ -359,6 +398,113 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       .eq("shop_id", shop.id);
 
     return redirect(`/app/purchase-orders`);
+  }
+
+  if (intent === "add-line-item") {
+    const productId = String(formData.get("product_id") ?? "").trim();
+    const shopifyVariantId = String(formData.get("shopify_variant_id") ?? "").trim();
+    const productName = String(formData.get("product_name") ?? "").trim();
+    const variantTitle = formData.get("variant_title")
+      ? String(formData.get("variant_title"))
+      : null;
+    const sku = formData.get("sku") ? String(formData.get("sku")) : null;
+    const unitCostRaw = formData.get("unit_cost");
+    const unitCost = unitCostRaw ? Number(unitCostRaw) : null;
+
+    if (!productId || !shopifyVariantId || !productName) {
+      return { success: false, error: "Missing product data" };
+    }
+
+    const lineTotal = unitCost != null ? unitCost * 1 : null;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: lineError } = await (supabase as any)
+      .from("purchase_order_line_items")
+      .insert({
+        purchase_order_id: params.id,
+        product_id: productId,
+        shopify_variant_id: shopifyVariantId,
+        sku,
+        product_name: productName,
+        variant_title: variantTitle,
+        quantity_ordered: 1,
+        unit_cost: unitCost,
+        line_total: lineTotal,
+        status: "pending",
+      });
+
+    if (lineError) {
+      return { success: false, error: `Failed to add product: ${lineError.message}` };
+    }
+
+    // Recalculate PO total
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: allLines } = await (supabase as any)
+      .from("purchase_order_line_items")
+      .select("line_total")
+      .eq("purchase_order_id", params.id);
+
+    const newTotal = (allLines ?? []).reduce(
+      (sum: number, l: { line_total: number | null }) => sum + (l.line_total ?? 0),
+      0,
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from("purchase_orders")
+      .update({ total_amount: newTotal })
+      .eq("id", params.id)
+      .eq("shop_id", shop.id);
+
+    return { success: true, error: null };
+  }
+
+  if (intent === "remove-line-item") {
+    const lineItemId = String(formData.get("line_item_id") ?? "").trim();
+    if (!lineItemId) {
+      return { success: false, error: "Missing line item ID" };
+    }
+
+    // Fetch the line item before deleting so we can return it for undo
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: removedLine } = await (supabase as any)
+      .from("purchase_order_line_items")
+      .select("*")
+      .eq("id", lineItemId)
+      .eq("purchase_order_id", params.id)
+      .single();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: deleteError } = await (supabase as any)
+      .from("purchase_order_line_items")
+      .delete()
+      .eq("id", lineItemId)
+      .eq("purchase_order_id", params.id);
+
+    if (deleteError) {
+      return { success: false, error: `Failed to remove product: ${deleteError.message}` };
+    }
+
+    // Recalculate PO total
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: allLines } = await (supabase as any)
+      .from("purchase_order_line_items")
+      .select("line_total")
+      .eq("purchase_order_id", params.id);
+
+    const newTotal = (allLines ?? []).reduce(
+      (sum: number, l: { line_total: number | null }) => sum + (l.line_total ?? 0),
+      0,
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from("purchase_orders")
+      .update({ total_amount: newTotal })
+      .eq("id", params.id)
+      .eq("shop_id", shop.id);
+
+    return { success: true, error: null, removedLine };
   }
 
   return { success: false, error: "Unknown action" };
