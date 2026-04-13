@@ -1,4 +1,5 @@
 import supabase from "../../db/supabase.server";
+import { dispatchReorderNotification } from "../notifications/controller.server";
 
 type ReorderCandidate = {
   product_id: string;
@@ -13,6 +14,12 @@ type ReorderCandidate = {
   variant_title: string | null;
   sku: string | null;
   shopify_variant_id: string;
+};
+
+type CreatedPO = {
+  poId: string;
+  poNumber: string;
+  productNames: string[];
 };
 
 export async function generatePoNumber(shopId: string): Promise<string> {
@@ -33,6 +40,7 @@ export async function generateDraftPOs(shopId: string): Promise<{
   posCreated: number;
   linesAdded: number;
   suppressedCount: number;
+  createdPOs: CreatedPO[];
 }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: candidates, error: ruleError } = await (supabase as any)
@@ -104,7 +112,7 @@ export async function generateDraftPOs(shopId: string): Promise<{
     );
 
   if (triggeredCandidates.length === 0) {
-    return { posCreated: 0, linesAdded: 0, suppressedCount: 0 };
+    return { posCreated: 0, linesAdded: 0, suppressedCount: 0, createdPOs: [] };
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -115,12 +123,17 @@ export async function generateDraftPOs(shopId: string): Promise<{
     .single();
   const currency: string = shopRow?.currency ?? "USD";
 
+  // Check which products have already been reorder-triggered for an open PO.
+  // These are skipped to avoid adding reorder_quantity on every sync.
+  // Products on open POs that were NOT reorder-triggered (i.e. manually added)
+  // will have reorder_quantity added to their existing line.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: existingLines } = await (supabase as any)
-    .from("purchase_order_line_items")
+  const { data: triggerLogs } = await (supabase as any)
+    .from("inventory_trigger_log")
     .select(
       `
       product_id,
+      purchase_order_id,
       purchase_orders!inner (
         shop_id,
         status
@@ -128,19 +141,19 @@ export async function generateDraftPOs(shopId: string): Promise<{
     `,
     )
     .eq("purchase_orders.shop_id", shopId)
-    .in("purchase_orders.status", ["draft", "sent", "confirmed", "in_transit"]);
+    .in("purchase_orders.status", ["draft", "sent", "confirmed", "in_transit"])
+    .in("action_taken", ["draft_po_created", "added_to_existing_po"]);
 
-  const alreadyOrderedProductIds = new Set<string>(
-    (existingLines ?? []).map((l: { product_id: string }) => l.product_id),
+  const alreadyReorderTriggered = new Set<string>(
+    (triggerLogs ?? []).map((l: { product_id: string }) => l.product_id),
   );
 
   const actionable = triggeredCandidates.filter(
-    (c) => !alreadyOrderedProductIds.has(c.product_id),
+    (c) => !alreadyReorderTriggered.has(c.product_id),
   );
-  const suppressedCount = triggeredCandidates.length - actionable.length;
 
   if (actionable.length === 0) {
-    return { posCreated: 0, linesAdded: 0, suppressedCount };
+    return { posCreated: 0, linesAdded: 0, suppressedCount: 0, createdPOs: [] };
   }
 
   const bySupplier = new Map<string, ReorderCandidate[]>();
@@ -152,25 +165,30 @@ export async function generateDraftPOs(shopId: string): Promise<{
 
   let posCreated = 0;
   let linesAdded = 0;
+  let linesUpdated = 0;
+  const createdPOs: CreatedPO[] = [];
 
   for (const [supplierId, lines] of bySupplier) {
+    // Find the first open PO for this supplier to merge into
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingDraft } = await (supabase as any)
+    const { data: openPO } = await (supabase as any)
       .from("purchase_orders")
-      .select("id, total_amount")
+      .select("id, po_number, total_amount")
       .eq("shop_id", shopId)
       .eq("supplier_id", supplierId)
-      .eq("status", "draft")
+      .in("status", ["draft", "sent", "confirmed", "in_transit"])
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     let poId: string;
+    let poNumber: string;
 
-    if (existingDraft) {
-      poId = existingDraft.id;
+    if (openPO) {
+      poId = openPO.id;
+      poNumber = openPO.po_number;
     } else {
-      const poNumber = await generatePoNumber(shopId);
+      poNumber = await generatePoNumber(shopId);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: newPo, error: poError } = await (supabase as any)
         .from("purchase_orders")
@@ -190,71 +208,123 @@ export async function generateDraftPOs(shopId: string): Promise<{
       posCreated++;
     }
 
-    const lineItems = lines.map((c) => ({
-      purchase_order_id: poId,
-      product_id: c.product_id,
-      shopify_variant_id: c.shopify_variant_id,
-      sku: c.sku,
-      product_name: c.title,
-      variant_title: c.variant_title,
-      quantity_ordered: c.reorder_quantity,
-      unit_cost: c.unit_cost,
-      line_total: c.unit_cost != null ? c.unit_cost * c.reorder_quantity : null,
-      status: "pending",
-    }));
-
+    // Check which products already have a line on this PO (manually added)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: lineError } = await (supabase as any)
+    const { data: existingLineItems } = await (supabase as any)
       .from("purchase_order_line_items")
-      .insert(lineItems);
+      .select("id, product_id, quantity_ordered, unit_cost")
+      .eq("purchase_order_id", poId);
 
-    if (lineError) throw new Error(`Failed to insert PO lines: ${lineError.message}`);
-    linesAdded += lineItems.length;
+    const existingByProduct = new Map<string, {
+      id: string;
+      quantity_ordered: number;
+      unit_cost: number | null;
+    }>();
+    for (const li of (existingLineItems ?? []) as {
+      id: string;
+      product_id: string;
+      quantity_ordered: number;
+      unit_cost: number | null;
+    }[]) {
+      existingByProduct.set(li.product_id, li);
+    }
 
-    const newTotal = lineItems.reduce((sum, l) => sum + (l.line_total ?? 0), 0);
+    const toInsert: ReorderCandidate[] = [];
+    const toUpdate: { candidate: ReorderCandidate; existingLine: { id: string; quantity_ordered: number; unit_cost: number | null } }[] = [];
+
+    for (const c of lines) {
+      const existing = existingByProduct.get(c.product_id);
+      if (existing) {
+        toUpdate.push({ candidate: c, existingLine: existing });
+      } else {
+        toInsert.push(c);
+      }
+    }
+
+    // Update existing lines: add reorder_quantity to existing quantity_ordered
+    let totalDelta = 0;
+    for (const { candidate, existingLine } of toUpdate) {
+      const newQty = existingLine.quantity_ordered + candidate.reorder_quantity;
+      const cost = candidate.unit_cost ?? existingLine.unit_cost;
+      const newLineTotal = cost != null ? cost * newQty : null;
+      const oldLineTotal = existingLine.unit_cost != null
+        ? existingLine.unit_cost * existingLine.quantity_ordered
+        : 0;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from("purchase_order_line_items")
+        .update({
+          quantity_ordered: newQty,
+          unit_cost: cost,
+          line_total: newLineTotal,
+        })
+        .eq("id", existingLine.id);
+
+      totalDelta += (newLineTotal ?? 0) - oldLineTotal;
+      linesUpdated++;
+    }
+
+    // Insert new lines
+    if (toInsert.length > 0) {
+      const lineItems = toInsert.map((c) => ({
+        purchase_order_id: poId,
+        product_id: c.product_id,
+        shopify_variant_id: c.shopify_variant_id,
+        sku: c.sku,
+        product_name: c.title,
+        variant_title: c.variant_title,
+        quantity_ordered: c.reorder_quantity,
+        unit_cost: c.unit_cost,
+        line_total: c.unit_cost != null ? c.unit_cost * c.reorder_quantity : null,
+        status: "pending",
+      }));
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: lineError } = await (supabase as any)
+        .from("purchase_order_line_items")
+        .insert(lineItems);
+
+      if (lineError) throw new Error(`Failed to insert PO lines: ${lineError.message}`);
+      linesAdded += lineItems.length;
+      totalDelta += lineItems.reduce((sum, l) => sum + (l.line_total ?? 0), 0);
+    }
+
+    if (toInsert.length === 0 && toUpdate.length === 0) continue;
+
+    // Update PO total
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any)
       .from("purchase_orders")
       .update({
-        total_amount: existingDraft
-          ? (existingDraft.total_amount ?? 0) + newTotal
-          : newTotal,
+        total_amount: (openPO?.total_amount ?? 0) + totalDelta,
       })
       .eq("id", poId);
 
-    const triggerLogs = lines.map((c) => ({
+    const allAffected = [...toInsert, ...toUpdate.map((u) => u.candidate)];
+    createdPOs.push({
+      poId,
+      poNumber,
+      productNames: allAffected.map((c) => c.title),
+    });
+
+    // Log the trigger so subsequent runs know this reorder was already handled
+    const newTriggerLogs = allAffected.map((c) => ({
       shop_id: shopId,
       product_id: c.product_id,
       triggered_at: new Date().toISOString(),
       stock_at_trigger: c.current_stock,
       reorder_point: c.reorder_point,
-      action_taken: existingDraft ? "added_to_existing_po" : "draft_po_created",
+      action_taken: openPO ? "added_to_existing_po" : "draft_po_created",
       purchase_order_id: poId,
     }));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: logError } = await (supabase as any).from("inventory_trigger_log").insert(triggerLogs);
+    const { error: logError } = await (supabase as any).from("inventory_trigger_log").insert(newTriggerLogs);
     if (logError) console.error("Failed to insert trigger logs:", logError.message);
   }
 
-  if (suppressedCount > 0) {
-    const suppressedLogs = triggeredCandidates
-      .filter((c) => alreadyOrderedProductIds.has(c.product_id))
-      .map((c) => ({
-        shop_id: shopId,
-        product_id: c.product_id,
-        triggered_at: new Date().toISOString(),
-        stock_at_trigger: c.current_stock,
-        reorder_point: c.reorder_point,
-        action_taken: "suppressed_po_in_transit",
-        purchase_order_id: null,
-      }));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: suppressedLogError } = await (supabase as any).from("inventory_trigger_log").insert(suppressedLogs);
-    if (suppressedLogError) console.error("Failed to insert suppressed trigger logs:", suppressedLogError.message);
-  }
-
-  return { posCreated, linesAdded, suppressedCount };
+  return { posCreated, linesAdded, suppressedCount: 0, createdPOs };
 }
 
 export async function checkAndTriggerReorder(
@@ -265,7 +335,7 @@ export async function checkAndTriggerReorder(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: product } = await (supabase as any)
     .from("products")
-    .select("id, current_stock")
+    .select("id")
     .eq("shop_id", shopId)
     .eq("shopify_inventory_item_id", shopifyInventoryItemId)
     .single();
@@ -283,10 +353,20 @@ export async function checkAndTriggerReorder(
 
   if (!rule) return;
 
-  const wasAbove = product.current_stock > rule.reorder_point;
-  const isNowAtOrBelow = newStock <= rule.reorder_point;
+  // The webhook handler updates current_stock BEFORE calling this function,
+  // so we compare the incoming newStock directly against the reorder point.
+  // Duplicate PO creation is already prevented by generateDraftPOs which
+  // skips products that already have open POs (draft/sent/confirmed/in_transit).
+  if (newStock > rule.reorder_point) return;
 
-  if (wasAbove && isNowAtOrBelow) {
-    await generateDraftPOs(shopId);
+  const result = await generateDraftPOs(shopId);
+
+  for (const po of result.createdPOs) {
+    await dispatchReorderNotification({
+      shopId,
+      poId: po.poId,
+      poNumber: po.poNumber,
+      productNames: po.productNames,
+    });
   }
 }

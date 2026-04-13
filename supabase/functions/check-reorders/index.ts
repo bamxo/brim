@@ -80,18 +80,20 @@ async function procesShop(shopId: string): Promise<{
     .single();
   const currency = shopRow?.currency ?? "USD";
 
-  const { data: existingLines } = await supabase
-    .from("purchase_order_line_items")
-    .select("product_id, purchase_orders!inner(shop_id, status)")
+  // Check which products have already been reorder-triggered for an open PO.
+  // Skip those — but products manually added to a PO get reorder_quantity added.
+  const { data: existingTriggerLogs } = await supabase
+    .from("inventory_trigger_log")
+    .select("product_id, purchase_order_id, purchase_orders!inner(shop_id, status)")
     .eq("purchase_orders.shop_id", shopId)
-    .in("purchase_orders.status", ["draft", "sent", "confirmed", "in_transit"]);
+    .in("purchase_orders.status", ["draft", "sent", "confirmed", "in_transit"])
+    .in("action_taken", ["draft_po_created", "added_to_existing_po"]);
 
   // deno-lint-ignore no-explicit-any
-  const alreadyOrdered = new Set<string>((existingLines ?? []).map((l: any) => l.product_id));
-  const actionable = triggered.filter((c) => !alreadyOrdered.has(c.product_id));
-  const suppressedCount = triggered.length - actionable.length;
+  const alreadyReorderTriggered = new Set<string>((existingTriggerLogs ?? []).map((l: any) => l.product_id));
+  const actionable = triggered.filter((c) => !alreadyReorderTriggered.has(c.product_id));
 
-  if (actionable.length === 0) return { posCreated: 0, linesAdded: 0, suppressedCount };
+  if (actionable.length === 0) return { posCreated: 0, linesAdded: 0, suppressedCount: 0 };
 
   const bySupplier = new Map<string, ReorderCandidate[]>();
   for (const c of actionable) {
@@ -102,23 +104,26 @@ async function procesShop(shopId: string): Promise<{
 
   let posCreated = 0;
   let linesAdded = 0;
+  let linesUpdated = 0;
 
   for (const [supplierId, lines] of bySupplier) {
-    const { data: existingDraft } = await supabase
+    const { data: openPO } = await supabase
       .from("purchase_orders")
-      .select("id, total_amount")
+      .select("id, po_number, total_amount")
       .eq("shop_id", shopId)
       .eq("supplier_id", supplierId)
-      .eq("status", "draft")
+      .in("status", ["draft", "sent", "confirmed", "in_transit"])
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     let poId: string;
-    if (existingDraft) {
-      poId = existingDraft.id;
+    let poNumber: string;
+    if (openPO) {
+      poId = openPO.id;
+      poNumber = openPO.po_number;
     } else {
-      const poNumber = await generatePoNumber(shopId);
+      poNumber = await generatePoNumber(shopId);
       const { data: newPo } = await supabase
         .from("purchase_orders")
         .insert({ shop_id: shopId, supplier_id: supplierId, po_number: poNumber, status: "draft", currency, total_amount: 0 })
@@ -128,42 +133,89 @@ async function procesShop(shopId: string): Promise<{
       posCreated++;
     }
 
-    const lineItems = lines.map((c) => ({
-      purchase_order_id: poId,
-      product_id: c.product_id,
-      shopify_variant_id: c.shopify_variant_id,
-      sku: c.sku,
-      product_name: c.title,
-      variant_title: c.variant_title,
-      quantity_ordered: c.reorder_quantity,
-      unit_cost: c.unit_cost,
-      line_total: c.unit_cost != null ? c.unit_cost * c.reorder_quantity : null,
-      status: "pending",
-    }));
+    // Check which products already have a line on this PO (manually added)
+    const { data: existingLineItems } = await supabase
+      .from("purchase_order_line_items")
+      .select("id, product_id, quantity_ordered, unit_cost")
+      .eq("purchase_order_id", poId);
 
-    await supabase.from("purchase_order_line_items").insert(lineItems);
-    linesAdded += lineItems.length;
+    // deno-lint-ignore no-explicit-any
+    const existingByProduct = new Map<string, any>();
+    for (const li of (existingLineItems ?? []) as { id: string; product_id: string; quantity_ordered: number; unit_cost: number | null }[]) {
+      existingByProduct.set(li.product_id, li);
+    }
 
-    const newTotal = lineItems.reduce((s, l) => s + (l.line_total ?? 0), 0);
+    const toInsert: ReorderCandidate[] = [];
+    const toUpdate: { candidate: ReorderCandidate; existingLine: { id: string; quantity_ordered: number; unit_cost: number | null } }[] = [];
+
+    for (const c of lines) {
+      const existing = existingByProduct.get(c.product_id);
+      if (existing) {
+        toUpdate.push({ candidate: c, existingLine: existing });
+      } else {
+        toInsert.push(c);
+      }
+    }
+
+    let totalDelta = 0;
+    for (const { candidate, existingLine } of toUpdate) {
+      const newQty = existingLine.quantity_ordered + candidate.reorder_quantity;
+      const cost = candidate.unit_cost ?? existingLine.unit_cost;
+      const newLineTotal = cost != null ? cost * newQty : null;
+      const oldLineTotal = existingLine.unit_cost != null
+        ? existingLine.unit_cost * existingLine.quantity_ordered
+        : 0;
+
+      await supabase
+        .from("purchase_order_line_items")
+        .update({ quantity_ordered: newQty, unit_cost: cost, line_total: newLineTotal })
+        .eq("id", existingLine.id);
+
+      totalDelta += (newLineTotal ?? 0) - oldLineTotal;
+      linesUpdated++;
+    }
+
+    if (toInsert.length > 0) {
+      const lineItems = toInsert.map((c) => ({
+        purchase_order_id: poId,
+        product_id: c.product_id,
+        shopify_variant_id: c.shopify_variant_id,
+        sku: c.sku,
+        product_name: c.title,
+        variant_title: c.variant_title,
+        quantity_ordered: c.reorder_quantity,
+        unit_cost: c.unit_cost,
+        line_total: c.unit_cost != null ? c.unit_cost * c.reorder_quantity : null,
+        status: "pending",
+      }));
+
+      await supabase.from("purchase_order_line_items").insert(lineItems);
+      linesAdded += lineItems.length;
+      totalDelta += lineItems.reduce((s, l) => s + (l.line_total ?? 0), 0);
+    }
+
+    if (toInsert.length === 0 && toUpdate.length === 0) continue;
+
     await supabase
       .from("purchase_orders")
-      .update({ total_amount: (existingDraft?.total_amount ?? 0) + newTotal })
+      .update({ total_amount: (openPO?.total_amount ?? 0) + totalDelta })
       .eq("id", poId);
 
+    const allAffected = [...toInsert, ...toUpdate.map((u) => u.candidate)];
     await supabase.from("inventory_trigger_log").insert(
-      lines.map((c) => ({
+      allAffected.map((c) => ({
         shop_id: shopId,
         product_id: c.product_id,
         triggered_at: new Date().toISOString(),
         stock_at_trigger: c.current_stock,
         reorder_point: c.reorder_point,
-        action_taken: existingDraft ? "added_to_existing_po" : "draft_po_created",
+        action_taken: openPO ? "added_to_existing_po" : "draft_po_created",
         purchase_order_id: poId,
       })),
     );
   }
 
-  return { posCreated, linesAdded, suppressedCount };
+  return { posCreated, linesAdded, suppressedCount: 0 };
 }
 
 Deno.serve(async (_req) => {

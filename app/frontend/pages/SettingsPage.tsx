@@ -4,6 +4,7 @@ import TitleBar from "../components/Header/TitleBar";
 type Settings = {
   notification_channel: string | null;
   default_send_method: string | null;
+  reorder_behavior: string | null;
   critical_stock_threshold: number | null;
   supplier_chase_days: number | null;
   delivery_reminder_days_before: number | null;
@@ -59,6 +60,19 @@ export default function SettingsPage() {
             <s-option value="ask">Ask me every time</s-option>
             <s-option value="brim">Send via Brim</s-option>
             <s-option value="gmail">Send via Gmail</s-option>
+          </s-select>
+        </s-section>
+
+        <s-section heading="Reorder behavior">
+          <s-select
+            name="reorder_behavior"
+            label="When stock hits the reorder point"
+            value={settings?.reorder_behavior ?? "ask_every_time"}
+            help-text="Controls what happens when a product's stock drops to or below its reorder point"
+          >
+            <s-option value="ask_every_time">Ask me every time</s-option>
+            <s-option value="auto_create" disabled>Automatically create draft PO (coming soon)</s-option>
+            <s-option value="auto_send" disabled>Automatically send PO to supplier (coming soon)</s-option>
           </s-select>
         </s-section>
 

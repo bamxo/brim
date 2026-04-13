@@ -34,6 +34,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { error } = await upsertShopSettings(shop.id, {
     notification_channel: formData.get("notification_channel"),
     default_send_method: formData.get("default_send_method"),
+    reorder_behavior: formData.get("reorder_behavior"),
     critical_stock_threshold: criticalStockThreshold,
     supplier_chase_days: supplierChaseDays,
     delivery_reminder_days_before: deliveryReminderDaysBefore,
