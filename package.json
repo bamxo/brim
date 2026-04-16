@@ -4,6 +4,7 @@
   "scripts": {
     "build": "react-router build",
     "dev": "shopify app dev",
+    "dev:tunnel": "PORT=3000 shopify app dev --tunnel-url https://dev.brims.app:3000",
     "config:link": "shopify app config link",
     "generate": "shopify app generate",
     "deploy": "shopify app deploy",
@@ -39,12 +40,14 @@
     "chrono-node": "^2.9.0",
     "defu": "^6.1.6",
     "esbuild": "^0.28.0",
+    "google-auth-library": "^10.6.2",
+    "googleapis": "^171.4.0",
     "isbot": "^5.1.31",
     "prisma": "^6.16.3",
+    "qs": "^6.15.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router": "^7.14.0",
-    "resend": "^6.9.3",
     "vite-tsconfig-paths": "^5.1.4"
   },
   "devDependencies": {

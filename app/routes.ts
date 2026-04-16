@@ -31,7 +31,12 @@ export default [
   route("webhooks/products/create",          "backend/webhooks/products-create.ts"),
   route("webhooks/products/delete",          "backend/webhooks/products-delete.ts"),
   route("webhooks/products/update",          "backend/webhooks/products-update.ts"),
-  route("webhooks/inbound-email",            "backend/webhooks/inbound-email.ts"),
+  route("webhooks/gmail",                    "backend/webhooks/gmail.ts"),
+
+  // ── Google OAuth (Gmail integration) ───────────────────────────────────
+  route("auth/google/start",      "routes/auth.google.start/route.tsx"),
+  route("auth/google/callback",   "routes/auth.google.callback/route.tsx"),
+  route("auth/google/disconnect", "routes/auth.google.disconnect/route.tsx"),
 
   // ── Auth (Shopify OAuth — keep as-is) ──────────────────────────────────
   route("auth/login", "routes/auth.login/route.tsx"),

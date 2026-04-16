@@ -1,9 +1,3 @@
-import { Resend } from "resend";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-const FROM = process.env.RESEND_FROM_ADDRESS ?? "orders@brimapp.com";
-const INBOUND_DOMAIN = process.env.RESEND_INBOUND_DOMAIN ?? "replies.brimapp.com";
 const APP_URL = process.env.APP_URL ?? "https://brimapp.com";
 
 function escapeHtml(str: string): string {
@@ -24,28 +18,52 @@ type LineItem = {
   line_total: number | null;
 };
 
-type SendPOEmailOptions = {
-  poId: string;
+type BuildHtmlOptions = {
   poNumber: string;
   supplierName: string;
-  supplierEmail: string;
   lineItems: LineItem[];
   currency: string;
   notes?: string | null;
   shopName: string;
-  pdfBuffer?: Buffer | null;
 };
-
-export function getReplyToAddress(poId: string): string {
-  return `po-${poId}@${INBOUND_DOMAIN}`;
-}
 
 function formatCurrency(amount: number | null, currency: string): string {
   if (amount == null) return "—";
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
 }
 
-function buildPoEmailHtml(opts: SendPOEmailOptions): string {
+export function buildPoEmailText(opts: BuildHtmlOptions): string {
+  const { poNumber, supplierName, lineItems, currency, notes, shopName } = opts;
+
+  const rows = lineItems
+    .map((l) => {
+      const name = l.product_name + (l.variant_title ? ` — ${l.variant_title}` : "");
+      const sku = l.sku ?? "—";
+      const qty = String(l.quantity_ordered);
+      const cost = formatCurrency(l.unit_cost, currency);
+      const total = formatCurrency(l.line_total, currency);
+      return `  ${name} | SKU: ${sku} | Qty: ${qty} | Unit: ${cost} | Total: ${total}`;
+    })
+    .join("\n");
+
+  const orderTotal = lineItems.reduce((s, l) => s + (l.line_total ?? 0), 0);
+
+  return `Purchase Order ${poNumber}
+
+Dear ${supplierName},
+
+Please find below our purchase order. Kindly confirm receipt and your expected delivery date by replying to this email.
+
+${rows}
+
+Order total: ${formatCurrency(orderTotal, currency)}
+${notes ? `\nNotes: ${notes}` : ""}
+Please confirm this order by replying to this email with your expected delivery date.
+
+Sent by ${shopName} via Brim`;
+}
+
+export function buildPoEmailHtml(opts: BuildHtmlOptions): string {
   const { poNumber, supplierName, lineItems, currency, notes, shopName } = opts;
 
   const rows = lineItems
@@ -105,25 +123,4 @@ function buildPoEmailHtml(opts: SendPOEmailOptions): string {
   </p>
 </body>
 </html>`;
-}
-
-export async function sendPOEmail(opts: SendPOEmailOptions): Promise<string> {
-  const replyTo = getReplyToAddress(opts.poId);
-
-  const attachments = opts.pdfBuffer
-    ? [{ filename: `${opts.poNumber}.pdf`, content: opts.pdfBuffer }]
-    : undefined;
-
-  const { data, error } = await resend.emails.send({
-    from: FROM,
-    to: opts.supplierEmail,
-    replyTo,
-    subject: `Purchase Order ${opts.poNumber} from ${opts.shopName}`,
-    html: buildPoEmailHtml(opts),
-    attachments,
-  });
-
-  if (error) throw new Error(`Resend error: ${error.message}`);
-
-  return data?.id ?? "";
 }

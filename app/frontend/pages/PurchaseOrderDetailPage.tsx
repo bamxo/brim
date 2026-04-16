@@ -9,6 +9,7 @@ type LineItem = {
   variant_title: string | null;
   sku: string | null;
   shopify_variant_id?: string;
+  image_url?: string | null;
   quantity_ordered: number;
   unit_cost: number | null;
   line_total: number | null;
@@ -33,11 +34,28 @@ type LoaderData = {
     total_amount: number;
     notes: string | null;
     confirmed_delivery_date: string | null;
+    gmail_thread_id: string | null;
+    gmail_account_email: string | null;
     suppliers: { id: string; name: string; email: string; phone: string | null } | null;
     purchase_order_line_items: LineItem[];
   };
   pdfDataUrl: string | null;
   supplierProducts: SupplierProduct[];
+  gmail: { email: string } | null;
+  thread: {
+    threadId: string;
+    messages: {
+      id: string;
+      from: string;
+      to: string;
+      date: string | null;
+      subject: string;
+      snippet: string;
+      bodyHtml: string | null;
+      bodyText: string | null;
+    }[];
+  } | null;
+  emailDraft: { subject: string; body: string } | null;
 };
 
 type ActionData = {
@@ -54,12 +72,22 @@ function productLabel(p: SupplierProduct): string {
 }
 
 export default function PurchaseOrderDetailPage() {
-  const { po, pdfDataUrl, supplierProducts } = useLoaderData<LoaderData>();
+  const { po, pdfDataUrl, supplierProducts, gmail, thread, emailDraft } = useLoaderData<LoaderData>();
   const actionData = useActionData<ActionData>();
   const navigate = useNavigate();
   const submit = useSubmit();
   const isDraft = po.status === "draft";
-  const [pdfExpanded, setPdfExpanded] = useState(false);
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+
+  // Email compose state — pre-populated from server-rendered draft
+  const [emailSubject, setEmailSubject] = useState(emailDraft?.subject ?? "");
+  const [emailBody, setEmailBody] = useState(emailDraft?.body ?? "");
+
+  // Keep in sync when loader data refreshes (e.g. line items changed)
+  useEffect(() => {
+    if (emailDraft?.subject) setEmailSubject(emailDraft.subject);
+    if (emailDraft?.body) setEmailBody(emailDraft.body);
+  }, [emailDraft?.subject, emailDraft?.body]);
 
   // Product search state
   const [productSearch, setProductSearch] = useState("");
@@ -199,6 +227,10 @@ export default function PurchaseOrderDetailPage() {
     const fd = new FormData();
     fd.append("intent", "mark-sent");
     fd.append("send_method", sendMethod);
+    if (sendMethod === "gmail") {
+      fd.append("email_subject", emailSubject);
+      fd.append("email_body", emailBody);
+    }
     submit(fd, { method: "post" });
   };
 
@@ -206,6 +238,29 @@ export default function PurchaseOrderDetailPage() {
     if (!confirm("Dismiss this purchase order?")) return;
     const fd = new FormData();
     fd.append("intent", "dismiss");
+    submit(fd, { method: "post" });
+  };
+
+  const [replyBody, setReplyBody] = useState("");
+  const handleSendReply = () => {
+    if (!replyBody.trim()) return;
+    const fd = new FormData();
+    fd.append("intent", "gmail-reply");
+    fd.append("body", replyBody);
+    submit(fd, { method: "post" });
+    setReplyBody("");
+  };
+
+  const handleMarkReceived = () => {
+    const fd = new FormData();
+    fd.append("intent", "mark-received");
+    submit(fd, { method: "post" });
+  };
+
+  const handleCancelOrder = () => {
+    if (!confirm("Are you sure you want to cancel this purchase order?")) return;
+    const fd = new FormData();
+    fd.append("intent", "cancel-order");
     submit(fd, { method: "post" });
   };
 
@@ -221,44 +276,36 @@ export default function PurchaseOrderDetailPage() {
     return productLabel(p).toLowerCase().includes(productSearch.toLowerCase());
   });
 
+  const statusColors: Record<string, { bg: string; color: string }> = {
+    draft: { bg: "#f3f4f6", color: "#6b7280" },
+    sent: { bg: "#dbeafe", color: "#1d4ed8" },
+    received: { bg: "#d1fae5", color: "#065f46" },
+    cancelled: { bg: "#fee2e2", color: "#b91c1c" },
+  };
+  const statusStyle = statusColors[po.status] ?? { bg: "#f3f4f6", color: "#374151" };
+
   return (
     <TitleBar heading={po.po_number} breadcrumbs={[{ label: "Purchase Orders", href: "/app/purchase-orders" }]}>
-      {isDraft && (
-        <s-button
-          slot="primary-action"
-          variant="primary"
-          onClick={() => handleSend("brim")}
-        >
-          Send via Brim
-        </s-button>
-      )}
       <s-button
         slot="secondary-action"
         onClick={() => navigate("/app/purchase-orders")}
       >
         Back
       </s-button>
+
       {actionData?.error && (
         <s-banner tone="critical" heading="Error">
           <s-paragraph>{actionData.error}</s-paragraph>
         </s-banner>
       )}
 
-      {/* Undo banner */}
       {undoItem && (
         <s-banner tone="info" heading="Product removed">
           <s-paragraph>
             {undoItem.product_name}
-            {undoItem.variant_title ? ` — ${undoItem.variant_title}` : ""} was
-            removed.
+            {undoItem.variant_title ? ` — ${undoItem.variant_title}` : ""} was removed.
           </s-paragraph>
-          <div
-            style={{
-              display: "flex",
-              gap: "8px",
-              marginTop: "8px",
-            }}
-          >
+          <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
             <s-button onClick={handleUndo}>Undo</s-button>
             <s-button
               onClick={() => {
@@ -272,46 +319,215 @@ export default function PurchaseOrderDetailPage() {
         </s-banner>
       )}
 
-      <s-section heading="Order details" slot="aside">
-        <s-paragraph>
-          <s-text>Supplier: </s-text>
-          <s-text>{po.suppliers?.name ?? "—"}</s-text>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Supplier email: </s-text>
-          <s-text>{po.suppliers?.email ?? "—"}</s-text>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Status: </s-text>
-          <s-text>{po.status}</s-text>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Total: </s-text>
-          <s-text>
-            {new Intl.NumberFormat("en-US", {
-              style: "currency",
-              currency: po.currency,
-            }).format(po.total_amount)}
-          </s-text>
-        </s-paragraph>
-        {po.confirmed_delivery_date && (
-          <s-paragraph>
-            <s-text>Delivery date: </s-text>
-            <s-text>
-              {new Date(po.confirmed_delivery_date).toLocaleDateString()}
-            </s-text>
-          </s-paragraph>
-        )}
-        {po.notes && (
-          <s-paragraph>
-            <s-text>Notes: </s-text>
-            <s-text>{po.notes}</s-text>
-          </s-paragraph>
-        )}
-      </s-section>
+      {/* ── Sidebar ── */}
+      <div slot="aside" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        {/* Summary card */}
+        <s-section heading="Summary">
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div>
+              <div style={{ fontSize: "12px", color: "#6d7175", marginBottom: "2px" }}>Supplier</div>
+              <div style={{ fontSize: "14px", fontWeight: 500, color: "#202223" }}>{po.suppliers?.name ?? "—"}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: "12px", color: "#6d7175", marginBottom: "2px" }}>Supplier email</div>
+              <div style={{ fontSize: "14px", color: "#202223" }}>{po.suppliers?.email ?? "—"}</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ fontSize: "12px", color: "#6d7175" }}>Status</div>
+              <span
+                style={{
+                  display: "inline-block",
+                  padding: "2px 10px",
+                  borderRadius: "12px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  background: statusStyle.bg,
+                  color: statusStyle.color,
+                  textTransform: "capitalize",
+                }}
+              >
+                {po.status}
+              </span>
+            </div>
+            {po.confirmed_delivery_date && (
+              <div>
+                <div style={{ fontSize: "12px", color: "#6d7175", marginBottom: "2px" }}>Delivery date</div>
+                <div style={{ fontSize: "14px", color: "#202223" }}>
+                  {new Date(po.confirmed_delivery_date).toLocaleDateString()}
+                </div>
+              </div>
+            )}
+            {po.notes && (
+              <div>
+                <div style={{ fontSize: "12px", color: "#6d7175", marginBottom: "2px" }}>Notes</div>
+                <div style={{ fontSize: "13px", color: "#202223" }}>{po.notes}</div>
+              </div>
+            )}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                paddingTop: "8px",
+                borderTop: "1px solid #e1e3e5",
+                marginTop: "4px",
+              }}
+            >
+              <span style={{ fontSize: "14px", fontWeight: 600, color: "#202223" }}>Total:</span>
+              <span style={{ fontSize: "16px", fontWeight: 700, color: "#202223" }}>
+                {new Intl.NumberFormat("en-US", { style: "currency", currency: po.currency }).format(po.total_amount)}
+              </span>
+            </div>
+          </div>
+        </s-section>
 
+        {/* Actions card — shown for non-draft orders */}
+        {!isDraft && po.status !== "received" && po.status !== "cancelled" && (
+          <s-section heading="Actions">
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {po.status === "sent" && (
+                <s-button variant="primary" onClick={handleMarkReceived}>
+                  Mark as received
+                </s-button>
+              )}
+              <s-button tone="critical" onClick={handleCancelOrder}>
+                Cancel order
+              </s-button>
+            </div>
+          </s-section>
+        )}
+
+        {/* PDF Preview card */}
+        {pdfDataUrl && (
+          <s-section heading="PDF Preview">
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {/* Clickable thumbnail */}
+              <div
+                onClick={() => setPdfModalOpen(true)}
+                style={{
+                  position: "relative",
+                  width: "70%",
+                  paddingBottom: "90.6%", /* 129.4% × 0.7 — smaller thumbnail */
+                  border: "1px solid #e1e3e5",
+                  borderRadius: "6px",
+                  overflow: "hidden",
+                  background: "#fff",
+                  cursor: "pointer",
+                  margin: "0 auto",
+                }}
+                title="Click to view full PDF"
+              >
+                <iframe
+                  src={pdfDataUrl}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: "100%",
+                    border: "none",
+                    pointerEvents: "none",
+                  }}
+                  tabIndex={-1}
+                  title="PDF thumbnail"
+                />
+                {/* Hover overlay hint */}
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "rgba(0,0,0,0)",
+                    transition: "background 0.15s",
+                  }}
+                  onMouseOver={(e) => { (e.currentTarget as HTMLDivElement).style.background = "rgba(0,0,0,0.08)"; }}
+                  onMouseOut={(e) => { (e.currentTarget as HTMLDivElement).style.background = "rgba(0,0,0,0)"; }}
+                />
+              </div>
+              <s-button onClick={handleDownloadPdf}>Download</s-button>
+            </div>
+          </s-section>
+        )}
+        
+        {/* PDF modal */}
+        {pdfDataUrl && pdfModalOpen && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 10000,
+              padding: "24px",
+            }}
+            onClick={() => setPdfModalOpen(false)}
+          >
+            <div
+              style={{
+                background: "#fff",
+                borderRadius: "12px",
+                overflow: "hidden",
+                width: "min(920px, 95vw)",
+                maxHeight: "95vh",
+                display: "flex",
+                flexDirection: "column",
+                boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal header */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "14px 20px",
+                  borderBottom: "1px solid #e1e3e5",
+                  flexShrink: 0,
+                }}
+              >
+                <span style={{ fontWeight: 600, fontSize: "15px", color: "#202223" }}>
+                  {po.po_number}.pdf
+                </span>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <s-button onClick={handleDownloadPdf}>Download</s-button>
+                  <button
+                    onClick={() => setPdfModalOpen(false)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: "4px",
+                      color: "#6d7175",
+                      display: "flex",
+                      alignItems: "center",
+                      borderRadius: "4px",
+                    }}
+                    aria-label="Close"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                      <path d="M14 4L4 14M4 4l10 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              {/* PDF iframe fills the rest */}
+              <iframe
+                src={pdfDataUrl}
+                style={{ flex: 1, border: "none", minHeight: "80vh" }}
+                title={`PDF preview for ${po.po_number}`}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Line items ── */}
       <s-section heading="Line items">
-        {/* Product search (draft only) */}
         {isDraft && (
           <div
             id="detail-product-search-container"
@@ -327,97 +543,149 @@ export default function PurchaseOrderDetailPage() {
           </div>
         )}
 
-        <s-table>
-          <s-table-header-row>
-            <s-table-header>Product</s-table-header>
-            <s-table-header>SKU</s-table-header>
-            <s-table-header>Qty</s-table-header>
-            <s-table-header>Unit cost</s-table-header>
-            <s-table-header>Line total</s-table-header>
-            {isDraft && <s-table-header></s-table-header>}
-          </s-table-header-row>
-          <s-table-body>
-            {po.purchase_order_line_items.map((line) => (
-              <s-table-row key={line.id}>
-                <s-table-cell>
-                  {line.product_name}
-                  {line.variant_title ? ` — ${line.variant_title}` : ""}
-                </s-table-cell>
-                <s-table-cell>{line.sku ?? "—"}</s-table-cell>
-                <s-table-cell>
-                  {isDraft ? (
-                    <s-number-field
-                      name={`qty-${line.id}`}
-                      label="Quantity"
-                      label-hidden
-                      min={0}
-                      value={String(line.quantity_ordered)}
+        <div
+          style={{
+            border: "1px solid #e1e3e5",
+            borderRadius: "8px",
+            overflow: "hidden",
+          }}
+        >
+          {/* Table header */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isDraft
+                ? "2fr 1fr 80px 100px 110px 40px"
+                : "2fr 1fr 80px 100px 110px",
+              padding: "10px 16px",
+              background: "#f9fafb",
+              borderBottom: "1px solid #e1e3e5",
+            }}
+          >
+            {["Product", "SKU", "Qty", "Unit cost", "Line total"].map((h) => (
+              <div key={h} style={{ fontSize: "12px", fontWeight: 600, color: "#6d7175", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                {h}
+              </div>
+            ))}
+            {isDraft && <div />}
+          </div>
+
+          {/* Table rows */}
+          {po.purchase_order_line_items.map((line, idx) => (
+            <div
+              key={line.id}
+              style={{
+                display: "grid",
+                gridTemplateColumns: isDraft
+                  ? "2fr 1fr 80px 100px 110px 40px"
+                  : "2fr 1fr 80px 100px 110px",
+                padding: "12px 16px",
+                alignItems: "center",
+                borderBottom:
+                  idx < po.purchase_order_line_items.length - 1
+                    ? "1px solid #f3f4f6"
+                    : "none",
+                background: "#fff",
+              }}
+            >
+              {/* Product cell with thumbnail */}
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "6px",
+                    border: "1px solid #e1e3e5",
+                    overflow: "hidden",
+                    flexShrink: 0,
+                    background: "#f6f6f7",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {line.image_url ? (
+                    <img
+                      src={line.image_url}
+                      alt={line.product_name}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     />
                   ) : (
-                    String(line.quantity_ordered)
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="3" y="3" width="14" height="14" rx="2" stroke="#c9cccf" strokeWidth="1.5" />
+                      <circle cx="7.5" cy="7.5" r="1.5" fill="#c9cccf" />
+                      <path d="M3 13l4-4 3 3 2-2 5 5" stroke="#c9cccf" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   )}
-                </s-table-cell>
-                <s-table-cell>
-                  {line.unit_cost != null
-                    ? new Intl.NumberFormat("en-US", {
-                        style: "currency",
-                        currency: po.currency,
-                      }).format(line.unit_cost)
-                    : "—"}
-                </s-table-cell>
-                <s-table-cell>
-                  {line.line_total != null
-                    ? new Intl.NumberFormat("en-US", {
-                        style: "currency",
-                        currency: po.currency,
-                      }).format(line.line_total)
-                    : "—"}
-                </s-table-cell>
-                {isDraft && (
-                  <s-table-cell>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        height: "100%",
-                      }}
-                    >
-                      <span
-                        onClick={() => setDeleteTarget(line)}
-                        onMouseOver={() => setHoveredDeleteId(line.id)}
-                        onMouseOut={() => setHoveredDeleteId(null)}
-                        style={{
-                          cursor: "pointer",
-                          padding: "6px",
-                          lineHeight: 1,
-                        }}
-                      >
-                        <s-icon
-                          type="delete"
-                          {...(hoveredDeleteId === line.id
-                            ? { tone: "critical" }
-                            : { color: "subdued" })}
-                        />
-                      </span>
+                </div>
+                <div>
+                  <div style={{ fontSize: "14px", fontWeight: 500, color: "#202223" }}>
+                    {line.product_name}
+                  </div>
+                  {line.variant_title && (
+                    <div style={{ fontSize: "12px", color: "#6d7175", marginTop: "1px" }}>
+                      {line.variant_title}
                     </div>
-                  </s-table-cell>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ fontSize: "14px", color: "#6d7175" }}>{line.sku ?? "—"}</div>
+
+              <div style={{ fontSize: "14px", color: "#202223" }}>
+                {isDraft ? (
+                  <s-number-field
+                    name={`qty-${line.id}`}
+                    label="Quantity"
+                    label-hidden
+                    min={0}
+                    value={String(line.quantity_ordered)}
+                  />
+                ) : (
+                  String(line.quantity_ordered)
                 )}
-              </s-table-row>
-            ))}
-          </s-table-body>
-        </s-table>
+              </div>
+
+              <div style={{ fontSize: "14px", color: "#202223" }}>
+                {line.unit_cost != null
+                  ? new Intl.NumberFormat("en-US", { style: "currency", currency: po.currency }).format(line.unit_cost)
+                  : "—"}
+              </div>
+
+              <div style={{ fontSize: "14px", fontWeight: 500, color: "#202223" }}>
+                {line.line_total != null
+                  ? new Intl.NumberFormat("en-US", { style: "currency", currency: po.currency }).format(line.line_total)
+                  : "—"}
+              </div>
+
+              {isDraft && (
+                <div style={{ display: "flex", justifyContent: "center" }}>
+                  <span
+                    onClick={() => setDeleteTarget(line)}
+                    onMouseOver={() => setHoveredDeleteId(line.id)}
+                    onMouseOut={() => setHoveredDeleteId(null)}
+                    style={{ cursor: "pointer", padding: "6px", lineHeight: 1, borderRadius: "4px" }}
+                  >
+                    <s-icon
+                      type="delete"
+                      {...(hoveredDeleteId === line.id ? { tone: "critical" } : { color: "subdued" })}
+                    />
+                  </span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
         {isDraft && (
-          <s-stack direction="inline" gap="base">
+          <div style={{ marginTop: "12px" }}>
             <s-button
               onClick={() => {
                 const fd = new FormData();
                 fd.append("intent", "update-quantities");
                 for (const line of po.purchase_order_line_items) {
                   fd.append("line_id", line.id);
-                  const input = document.querySelector<HTMLInputElement>(
-                    `[name="qty-${line.id}"]`,
-                  );
+                  const input = document.querySelector<HTMLInputElement>(`[name="qty-${line.id}"]`);
                   fd.append("quantity", input?.value ?? String(line.quantity_ordered));
                 }
                 submit(fd, { method: "post" });
@@ -425,107 +693,184 @@ export default function PurchaseOrderDetailPage() {
             >
               Update quantities
             </s-button>
-          </s-stack>
+          </div>
         )}
       </s-section>
 
-      {pdfDataUrl && (
-        <s-section heading="Document">
-          {!pdfExpanded ? (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                padding: "4px 0",
-              }}
-            >
-              <div
-                style={{
-                  width: "40px",
-                  height: "52px",
-                  border: "1px solid #d9d9d9",
-                  borderRadius: "4px",
-                  overflow: "hidden",
-                  flexShrink: 0,
-                  background: "#fff",
-                }}
-              >
-                <iframe
-                  src={pdfDataUrl}
+      {/* ── Email thread ── */}
+      {thread && thread.messages.length > 0 && (
+        <s-section heading="Email thread">
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+              maxHeight: "420px",
+              overflowY: "auto",
+              paddingRight: "4px",
+            }}
+          >
+            {thread.messages.map((m) => {
+              const isOwn =
+                po.gmail_account_email != null &&
+                m.from.toLowerCase().includes(po.gmail_account_email.toLowerCase());
+              const senderInitial = m.from.charAt(0).toUpperCase();
+
+              return (
+                <div
+                  key={m.id}
                   style={{
-                    width: "612px",
-                    height: "792px",
-                    transform: "scale(0.065)",
-                    transformOrigin: "top left",
-                    border: "none",
-                    pointerEvents: "none",
+                    display: "flex",
+                    flexDirection: isOwn ? "row-reverse" : "row",
+                    gap: "10px",
+                    alignItems: "flex-start",
                   }}
-                  tabIndex={-1}
-                  title="PDF thumbnail"
-                />
-              </div>
-              <span style={{ flex: 1, fontSize: "13px", fontWeight: 500 }}>
-                PDF Preview
-              </span>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <s-button onClick={() => setPdfExpanded(true)}>
-                  Expand
-                </s-button>
-                <s-button onClick={handleDownloadPdf}>
-                  Download
+                >
+                  {/* Avatar */}
+                  <div
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "50%",
+                      background: isOwn ? "#c9d8f0" : "#e2e8f0",
+                      color: isOwn ? "#1d4ed8" : "#374151",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {senderInitial}
+                  </div>
+
+                  {/* Bubble */}
+                  <div style={{ maxWidth: "80%" }}>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#6d7175",
+                        marginBottom: "4px",
+                        textAlign: isOwn ? "right" : "left",
+                      }}
+                    >
+                      <strong style={{ color: "#202223" }}>{m.from}</strong>
+                      {m.date ? ` on ${new Date(m.date).toLocaleString()}` : ""}
+                    </div>
+                    {m.subject && (
+                      <div
+                        style={{
+                          fontSize: "13px",
+                          fontWeight: 600,
+                          color: "#202223",
+                          marginBottom: "4px",
+                          textAlign: isOwn ? "right" : "left",
+                        }}
+                      >
+                        {m.subject}
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        background: isOwn ? "#dbeafe" : "#f3f4f6",
+                        borderRadius: isOwn ? "12px 2px 12px 12px" : "2px 12px 12px 12px",
+                        padding: "10px 14px",
+                        fontSize: "14px",
+                        color: "#202223",
+                        whiteSpace: "pre-wrap",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {m.bodyText ?? m.snippet}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {gmail && (
+            <div style={{ marginTop: "16px", borderTop: "1px solid #e1e3e5", paddingTop: "16px" }}>
+              <s-text-area
+                name="reply_body"
+                label="Reply to supplier"
+                rows={4}
+                value={replyBody}
+                onChange={(e: Event) => {
+                  const t = e.target as HTMLTextAreaElement & { value: string };
+                  setReplyBody(t.value);
+                }}
+              />
+              <div style={{ marginTop: "8px" }}>
+                <s-button variant="primary" onClick={handleSendReply} disabled={!replyBody.trim()}>
+                  Send reply
                 </s-button>
               </div>
             </div>
-          ) : (
-            <>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "8px",
-                  marginBottom: "8px",
-                }}
-              >
-                <s-button onClick={() => setPdfExpanded(false)}>
-                  Collapse
-                </s-button>
-                <s-button onClick={handleDownloadPdf}>
-                  Download
-                </s-button>
-              </div>
-              <iframe
-                src={pdfDataUrl}
-                style={{
-                  width: "100%",
-                  height: "800px",
-                  border: "1px solid #e1e3e5",
-                  borderRadius: "8px",
-                }}
-                title={`PDF preview for ${po.po_number}`}
-              />
-            </>
           )}
         </s-section>
       )}
 
+      {/* ── Send this order (draft only) ── */}
       {isDraft && (
-        <s-section heading="Send this order" slot="aside">
-          <s-paragraph>
-            Choose how to send this purchase order to{" "}
-            {po.suppliers?.name ?? "your supplier"}.
-          </s-paragraph>
-          <s-stack direction="block" gap="base">
-            <s-button variant="primary" onClick={() => handleSend("brim")}>
-              Send via Brim email
-            </s-button>
-            <s-button onClick={() => handleSend("clipboard")}>
-              Copy to clipboard
-            </s-button>
-            <s-button disabled>
-              Send via Gmail (coming soon)
-            </s-button>
-          </s-stack>
+        <s-section heading="Send this order">
+          {gmail ? (
+            <s-stack direction="block" gap="base">
+              <s-text-field
+                label="Subject"
+                value={emailSubject}
+                onInput={(e: Event) => {
+                  const t = e.target as HTMLInputElement & { value: string };
+                  setEmailSubject(t.value);
+                }}
+              />
+              <s-text-area
+                label="Message"
+                rows={12}
+                value={emailBody}
+                onInput={(e: Event) => {
+                  const t = e.target as HTMLTextAreaElement & { value: string };
+                  setEmailBody(t.value);
+                }}
+              />
+              {pdfDataUrl && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "8px 12px",
+                    background: "#f6f6f7",
+                    borderRadius: "6px",
+                    fontSize: "13px",
+                    color: "#333",
+                  }}
+                >
+                  <s-icon type="attachment" />
+                  <span>{po.po_number}.pdf</span>
+                </div>
+              )}
+              <s-stack direction="inline" gap="base">
+                <s-button
+                  variant="primary"
+                  onClick={() => handleSend("gmail")}
+                  disabled={!emailSubject.trim() || !emailBody.trim()}
+                >
+                  Send via Gmail
+                </s-button>
+                <s-button onClick={() => handleSend("clipboard")}>Copy to clipboard</s-button>
+              </s-stack>
+            </s-stack>
+          ) : (
+            <s-stack direction="block" gap="base">
+              <s-paragraph>Connect a Gmail account to send from your own address.</s-paragraph>
+              <s-link href="/app/settings">
+                <s-button variant="primary">Connect Gmail</s-button>
+              </s-link>
+              <s-button onClick={() => handleSend("clipboard")}>Copy to clipboard</s-button>
+            </s-stack>
+          )}
           <s-divider />
           <s-button tone="critical" onClick={handleDismiss}>
             Dismiss order
@@ -562,25 +907,14 @@ export default function PurchaseOrderDetailPage() {
                   borderBottom: "1px solid #f1f1f1",
                   fontSize: "14px",
                 }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.background = "#f6f6f7";
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.background = "#fff";
-                }}
+                onMouseOver={(e) => { e.currentTarget.style.background = "#f6f6f7"; }}
+                onMouseOut={(e) => { e.currentTarget.style.background = "#fff"; }}
               >
                 {productLabel(p)}
               </div>
             ))
           ) : (
-            <div
-              style={{
-                padding: "12px",
-                fontSize: "13px",
-                color: "#6d7175",
-                textAlign: "center",
-              }}
-            >
+            <div style={{ padding: "12px", fontSize: "13px", color: "#6d7175", textAlign: "center" }}>
               No products available to add
             </div>
           )}
@@ -592,11 +926,8 @@ export default function PurchaseOrderDetailPage() {
         <div
           style={{
             position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0, 0, 0, 0.4)",
+            top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.4)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -611,28 +942,22 @@ export default function PurchaseOrderDetailPage() {
               padding: "24px",
               maxWidth: "420px",
               width: "90%",
-              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ fontWeight: 600, fontSize: "16px", marginBottom: "12px" }}>
-              Remove product?
-            </div>
+            <div style={{ fontWeight: 600, fontSize: "16px", marginBottom: "12px" }}>Remove product?</div>
             <div style={{ fontSize: "14px", color: "#6d7175", marginBottom: "20px" }}>
               Are you sure you want to remove{" "}
               <strong style={{ color: "#202223" }}>
                 {deleteTarget.product_name}
-                {deleteTarget.variant_title
-                  ? ` — ${deleteTarget.variant_title}`
-                  : ""}
+                {deleteTarget.variant_title ? ` — ${deleteTarget.variant_title}` : ""}
               </strong>{" "}
               from this purchase order?
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
               <s-button onClick={() => setDeleteTarget(null)}>Cancel</s-button>
-              <s-button tone="critical" onClick={handleConfirmDelete}>
-                Remove
-              </s-button>
+              <s-button tone="critical" onClick={handleConfirmDelete}>Remove</s-button>
             </div>
           </div>
         </div>

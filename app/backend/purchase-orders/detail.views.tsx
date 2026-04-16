@@ -7,7 +7,11 @@ import { redirect } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../../shopify.server";
 import { getShopByDomain } from "../shops/controller.server";
-import { sendPOEmail, getReplyToAddress } from "../email/service.server";
+import { buildPoEmailHtml, buildPoEmailText } from "../google/email-template.server";
+import { sendGmailMessage } from "../google/send.server";
+import { GmailNotConnectedError } from "../google/gmail-client.server";
+import { getGoogleAccount } from "../google/oauth.server";
+import { fetchThread } from "../google/thread.server";
 import supabase from "../../db/supabase.server";
 import { generatePurchaseOrderPdf } from "./pdf/generator.server";
 import type { PurchaseOrderPdfData } from "./pdf/types";
@@ -153,7 +157,39 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     // PDF generation failure should not block page load
   }
 
-  return { po, pdfDataUrl, supplierProducts };
+  const googleAccount = await getGoogleAccount(shop.id);
+  const gmail = googleAccount && !googleAccount.is_disconnected
+    ? { email: googleAccount.google_email }
+    : null;
+
+  let thread = null;
+  if (po.gmail_thread_id && gmail) {
+    try {
+      thread = await fetchThread(shop.id, po.gmail_thread_id);
+    } catch (err) {
+      console.error("Failed to fetch Gmail thread:", err);
+    }
+  }
+
+  // Pre-render email draft for the compose UI
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const shopRow = await (supabase as any).from("shops").select("shop_name").eq("id", shop.id).single();
+  const shopName = shopRow?.data?.shop_name ?? shop.shopify_domain;
+  const emailDraft = po.status === "draft" && po.suppliers
+    ? {
+        subject: `Purchase Order ${po.po_number} from ${shopName}`,
+        body: buildPoEmailText({
+          poNumber: po.po_number,
+          supplierName: po.suppliers.name,
+          lineItems: po.purchase_order_line_items ?? [],
+          currency: po.currency ?? "USD",
+          notes: po.notes,
+          shopName,
+        }),
+      }
+    : null;
+
+  return { po, pdfDataUrl, supplierProducts, gmail, thread, emailDraft };
 };
 
 const SHOP_BILLING_QUERY = `#graphql
@@ -238,7 +274,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   if (intent === "mark-sent") {
     const sendMethod = formData.get("send_method") as string;
 
-    if (sendMethod === "brim") {
+    if (sendMethod === "gmail") {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: po } = await (supabase as any)
         .from("purchase_orders")
@@ -334,26 +370,57 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       }
 
       try {
-        await sendPOEmail({
-          poId: params.id!,
-          poNumber: po.po_number,
-          supplierName: po.suppliers.name,
-          supplierEmail: po.suppliers.email,
-          lineItems: po.purchase_order_line_items,
-          currency: po.currency,
-          notes: po.notes,
-          shopName: shopRow?.data?.shop_name ?? shop.shopify_domain,
-          pdfBuffer,
+        const customSubject = formData.get("email_subject") as string | null;
+        const customBody = formData.get("email_body") as string | null;
+
+        let html: string;
+        if (customBody) {
+          // Wrap plain-text body in a simple HTML envelope preserving line breaks
+          const escaped = customBody
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\n/g, "<br>");
+          html = `<!DOCTYPE html><html><body style="font-family:sans-serif;color:#111;max-width:640px;margin:0 auto;padding:24px;">${escaped}</body></html>`;
+        } else {
+          html = buildPoEmailHtml({
+            poNumber: po.po_number,
+            supplierName: po.suppliers.name,
+            lineItems: po.purchase_order_line_items,
+            currency: po.currency,
+            notes: po.notes,
+            shopName: shopRow?.data?.shop_name ?? shop.shopify_domain,
+          });
+        }
+
+        const subject = customSubject?.trim()
+          || `Purchase Order ${po.po_number} from ${shopRow?.data?.shop_name ?? shop.shopify_domain}`;
+
+        const result = await sendGmailMessage({
+          shopId: shop.id,
+          to: po.suppliers.email,
+          subject,
+          html,
+          attachments: pdfBuffer
+            ? [
+                {
+                  filename: `${po.po_number}.pdf`,
+                  contentType: "application/pdf",
+                  content: pdfBuffer,
+                },
+              ]
+            : undefined,
         });
 
-        const replyTo = getReplyToAddress(params.id!);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any)
           .from("purchase_orders")
           .update({
             status: "sent",
-            send_method: "brim",
-            reply_to_address: replyTo,
+            send_method: "gmail",
+            gmail_thread_id: result.threadId,
+            gmail_message_id: result.rfc822MessageId ?? result.messageId,
+            gmail_account_email: result.fromEmail,
             sent_at: new Date().toISOString(),
           })
           .eq("id", params.id)
@@ -365,9 +432,13 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
           .update({ status: "send_failed" })
           .eq("id", params.id)
           .eq("shop_id", shop.id);
+        const prefix =
+          err instanceof GmailNotConnectedError
+            ? "Gmail is not connected. Connect it in Settings and try again"
+            : "Failed to send email";
         return {
           success: false,
-          error: `Failed to send email: ${(err as Error).message}`,
+          error: `${prefix}: ${(err as Error).message}`,
         };
       }
     } else {
@@ -384,6 +455,57 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     }
 
     return redirect(`/app/purchase-orders`);
+  }
+
+  if (intent === "gmail-reply") {
+    const bodyText = String(formData.get("body") ?? "").trim();
+    if (!bodyText) return { success: false, error: "Reply body is empty" };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: po } = await (supabase as any)
+      .from("purchase_orders")
+      .select("id, po_number, gmail_thread_id, suppliers(email, name)")
+      .eq("id", params.id)
+      .eq("shop_id", shop.id)
+      .single();
+
+    if (!po?.gmail_thread_id) {
+      return { success: false, error: "This PO has no Gmail thread" };
+    }
+
+    try {
+      const thread = await fetchThread(shop.id, po.gmail_thread_id);
+      const latest = thread?.messages[thread.messages.length - 1];
+      const inReplyTo = latest?.rfc822MessageId ?? null;
+      const references = latest?.rfc822MessageId ? [latest.rfc822MessageId] : null;
+      const subject = latest?.subject?.startsWith("Re:")
+        ? latest.subject
+        : `Re: ${latest?.subject ?? `Purchase Order ${po.po_number}`}`;
+
+      const escaped = bodyText
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\n/g, "<br>");
+
+      await sendGmailMessage({
+        shopId: shop.id,
+        to: po.suppliers.email,
+        subject,
+        html: `<div>${escaped}</div>`,
+        threadId: po.gmail_thread_id,
+        inReplyTo,
+        references,
+      });
+
+      return { success: true, error: null };
+    } catch (err) {
+      const prefix =
+        err instanceof GmailNotConnectedError
+          ? "Gmail is not connected. Connect it in Settings"
+          : "Failed to send reply";
+      return { success: false, error: `${prefix}: ${(err as Error).message}` };
+    }
   }
 
   if (intent === "dismiss") {

@@ -1,4 +1,5 @@
-import { useActionData, useLoaderData, useSubmit } from "react-router";
+import { useActionData, useLoaderData, useSearchParams, useSubmit, useRevalidator } from "react-router";
+import { useEffect } from "react";
 import TitleBar from "../components/Header/TitleBar";
 
 type Settings = {
@@ -10,13 +11,42 @@ type Settings = {
   delivery_reminder_days_before: number | null;
 } | null;
 
-type LoaderData = { settings: Settings };
-type ActionData = { success?: boolean; error?: string | null };
+type GoogleAccount = {
+  email: string;
+  connectedAt: string;
+  isDisconnected: boolean;
+} | null;
+
+type LoaderData = { settings: Settings; google: GoogleAccount; shopId: string };
+type ActionData = { success?: boolean; error?: string | null; googleDisconnected?: boolean };
 
 export default function SettingsPage() {
-  const { settings } = useLoaderData<LoaderData>();
+  const { settings, google, shopId } = useLoaderData<LoaderData>();
   const actionData = useActionData<ActionData>();
   const submit = useSubmit();
+  const [searchParams] = useSearchParams();
+  const googleConnected = searchParams.get("google_connected") === "1";
+
+  const { revalidate } = useRevalidator();
+
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === "gmail_connected") revalidate();
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [revalidate]);
+
+  const handleConnectGmail = () => {
+    // Must open outside the Shopify iframe — Google blocks OAuth in iframes
+    // Pass shop_id so the new tab doesn't need a Shopify session
+    window.open(
+      `${window.location.origin}/auth/google/start?shop_id=${shopId}`,
+      "_blank",
+    );
+  };
+  const googleDisconnected = searchParams.get("google_disconnected") === "1";
+  const googleError = searchParams.get("google_error");
 
   const handleSave = () => {
     const form = document.getElementById("settings-form") as HTMLFormElement;
@@ -37,6 +67,49 @@ export default function SettingsPage() {
           <s-paragraph>{actionData.error}</s-paragraph>
         </s-banner>
       )}
+      {googleConnected && (
+        <s-banner tone="success" heading="Gmail connected" />
+      )}
+      {(googleDisconnected || actionData?.googleDisconnected) && (
+        <s-banner tone="info" heading="Gmail disconnected" />
+      )}
+      {googleError && (
+        <s-banner tone="critical" heading="Gmail connection failed">
+          <s-paragraph>{googleError}</s-paragraph>
+        </s-banner>
+      )}
+
+      <s-section heading="Gmail connection">
+        {google && !google.isDisconnected ? (
+          <>
+            <s-paragraph>
+              Connected as <strong>{google.email}</strong>. Purchase orders sent by email
+              will come from this address.
+            </s-paragraph>
+            <s-stack direction="inline" gap="base">
+              <form method="post">
+                <input type="hidden" name="intent" value="disconnect-gmail" />
+                <s-button type="submit" variant="secondary" tone="critical">
+                  Disconnect
+                </s-button>
+              </form>
+              <s-button variant="secondary" onClick={handleConnectGmail}>
+                Switch account
+              </s-button>
+            </s-stack>
+          </>
+        ) : (
+          <>
+            <s-paragraph>
+              Connect a Gmail account to send purchase orders from your own email address
+              and track supplier replies inside Brim.
+            </s-paragraph>
+            <s-button variant="primary" onClick={handleConnectGmail}>
+              Connect Gmail
+            </s-button>
+          </>
+        )}
+      </s-section>
 
       <form id="settings-form" method="post">
         <s-section heading="Notifications">
@@ -58,8 +131,8 @@ export default function SettingsPage() {
             value={settings?.default_send_method ?? "ask"}
           >
             <s-option value="ask">Ask me every time</s-option>
-            <s-option value="brim">Send via Brim</s-option>
             <s-option value="gmail">Send via Gmail</s-option>
+            <s-option value="clipboard">Copy to clipboard</s-option>
           </s-select>
         </s-section>
 
