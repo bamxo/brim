@@ -482,17 +482,11 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
         ? latest.subject
         : `Re: ${latest?.subject ?? `Purchase Order ${po.po_number}`}`;
 
-      const escaped = bodyText
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/\n/g, "<br>");
-
       await sendGmailMessage({
         shopId: shop.id,
         to: po.suppliers.email,
         subject,
-        html: `<div>${escaped}</div>`,
+        html: `<div>${bodyText}</div>`,
         threadId: po.gmail_thread_id,
         inReplyTo,
         references,

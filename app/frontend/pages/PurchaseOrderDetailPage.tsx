@@ -241,14 +241,46 @@ export default function PurchaseOrderDetailPage() {
     submit(fd, { method: "post" });
   };
 
-  const [replyBody, setReplyBody] = useState("");
+  const [replyHtml, setReplyHtml] = useState("");
+  const replyEditorRef = useRef<HTMLDivElement | null>(null);
+
+  const replyHasContent = replyHtml.replace(/<[^>]*>/g, "").trim().length > 0;
+
   const handleSendReply = () => {
-    if (!replyBody.trim()) return;
+    if (!replyHasContent) return;
     const fd = new FormData();
     fd.append("intent", "gmail-reply");
-    fd.append("body", replyBody);
+    fd.append("body", replyHtml);
     submit(fd, { method: "post" });
-    setReplyBody("");
+    setReplyHtml("");
+    if (replyEditorRef.current) replyEditorRef.current.innerHTML = "";
+  };
+
+  // Strip quoted reply history from email body text
+  const stripQuotedContent = (text: string): string => {
+    const onWroteMatch = text.search(/\nOn .+wrote:/s);
+    if (onWroteMatch !== -1) {
+      return text.slice(0, onWroteMatch).trim();
+    }
+    const lines = text.split("\n");
+    const firstQuotedLine = lines.findIndex((l) => l.trimStart().startsWith(">"));
+    if (firstQuotedLine !== -1) {
+      return lines.slice(0, firstQuotedLine).join("\n").trim();
+    }
+    return text.trim();
+  };
+
+  const execEditorCommand = (command: string, value?: string) => {
+    if (replyEditorRef.current) replyEditorRef.current.focus();
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    document.execCommand(command, false, value);
+    if (replyEditorRef.current) setReplyHtml(replyEditorRef.current.innerHTML);
+  };
+
+  const promptAndInsertLink = () => {
+    const url = window.prompt("Enter URL");
+    if (!url) return;
+    execEditorCommand("createLink", url);
   };
 
   const handleMarkReceived = () => {
@@ -782,7 +814,7 @@ export default function PurchaseOrderDetailPage() {
                         lineHeight: 1.5,
                       }}
                     >
-                      {m.bodyText ?? m.snippet}
+                      {m.bodyText ? stripQuotedContent(m.bodyText) : m.snippet}
                     </div>
                   </div>
                 </div>
@@ -792,20 +824,191 @@ export default function PurchaseOrderDetailPage() {
 
           {gmail && (
             <div style={{ marginTop: "16px", borderTop: "1px solid #e1e3e5", paddingTop: "16px" }}>
-              <s-text-area
-                name="reply_body"
-                label="Reply to supplier"
-                rows={4}
-                value={replyBody}
-                onChange={(e: Event) => {
-                  const t = e.target as HTMLTextAreaElement & { value: string };
-                  setReplyBody(t.value);
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "#202223", marginBottom: "8px" }}>
+                Reply to supplier
+              </div>
+              <div
+                style={{
+                  border: "1px solid #c9cccf",
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                  background: "#fff",
                 }}
-              />
-              <div style={{ marginTop: "8px" }}>
-                <s-button variant="primary" onClick={handleSendReply} disabled={!replyBody.trim()}>
-                  Send reply
-                </s-button>
+              >
+                {/* Toolbar */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "2px",
+                    padding: "6px 8px",
+                    borderBottom: "1px solid #e1e3e5",
+                    background: "#f9fafb",
+                  }}
+                >
+                  {(() => {
+                    const iconBtn = (key: string, title: string, onClick: () => void, node: React.ReactNode) => (
+                      <button
+                        key={key}
+                        type="button"
+                        title={title}
+                        onMouseDown={(e) => { e.preventDefault(); onClick(); }}
+                        style={{
+                          width: "28px",
+                          height: "28px",
+                          border: "none",
+                          borderRadius: "4px",
+                          background: "transparent",
+                          cursor: "pointer",
+                          color: "#374151",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#e5e7eb"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+                      >
+                        {node}
+                      </button>
+                    );
+                    const divider = (k: string) => (
+                      <div key={k} style={{ width: "1px", height: "18px", background: "#e1e3e5", margin: "0 4px" }} />
+                    );
+                    return (
+                      <>
+                        {iconBtn("bold", "Bold (⌘B)", () => execEditorCommand("bold"),
+                          <span style={{ fontWeight: 700, fontSize: "13px" }}>B</span>)}
+                        {iconBtn("italic", "Italic (⌘I)", () => execEditorCommand("italic"),
+                          <span style={{ fontStyle: "italic", fontSize: "13px" }}>I</span>)}
+                        {iconBtn("underline", "Underline (⌘U)", () => execEditorCommand("underline"),
+                          <span style={{ textDecoration: "underline", fontSize: "13px" }}>U</span>)}
+                        {iconBtn("strike", "Strikethrough", () => execEditorCommand("strikeThrough"),
+                          <span style={{ textDecoration: "line-through", fontSize: "13px" }}>S</span>)}
+                        {divider("d1")}
+                        {iconBtn("ul", "Bulleted list", () => execEditorCommand("insertUnorderedList"),
+                          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                            <circle cx="4" cy="5" r="1" fill="currentColor" />
+                            <circle cx="4" cy="10" r="1" fill="currentColor" />
+                            <circle cx="4" cy="15" r="1" fill="currentColor" />
+                            <path d="M8 5h9M8 10h9M8 15h9" />
+                          </svg>)}
+                        {iconBtn("ol", "Numbered list", () => execEditorCommand("insertOrderedList"),
+                          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                            <text x="2" y="7" fontSize="5" fill="currentColor" stroke="none">1.</text>
+                            <text x="2" y="12" fontSize="5" fill="currentColor" stroke="none">2.</text>
+                            <text x="2" y="17" fontSize="5" fill="currentColor" stroke="none">3.</text>
+                            <path d="M8 5h9M8 10h9M8 15h9" />
+                          </svg>)}
+                        {divider("d2")}
+                        {iconBtn("align-left", "Align left", () => execEditorCommand("justifyLeft"),
+                          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                            <path d="M3 5h14M3 10h10M3 15h14" />
+                          </svg>)}
+                        {iconBtn("align-center", "Align center", () => execEditorCommand("justifyCenter"),
+                          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                            <path d="M3 5h14M5 10h10M3 15h14" />
+                          </svg>)}
+                        {iconBtn("align-right", "Align right", () => execEditorCommand("justifyRight"),
+                          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                            <path d="M3 5h14M7 10h10M3 15h14" />
+                          </svg>)}
+                        {divider("d3")}
+                        {iconBtn("link", "Insert link", promptAndInsertLink,
+                          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M8 12a3 3 0 014 0l3-3a3 3 0 00-4-4l-1 1" />
+                            <path d="M12 8a3 3 0 00-4 0l-3 3a3 3 0 004 4l1-1" />
+                          </svg>)}
+                        {iconBtn("clear", "Clear formatting", () => execEditorCommand("removeFormat"),
+                          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M4 4l12 12M7 4h9l-4 7" />
+                          </svg>)}
+                      </>
+                    );
+                  })()}
+                  <div style={{ flex: 1 }} />
+                  <label
+                    title="Attach file"
+                    style={{
+                      width: "28px",
+                      height: "28px",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#374151",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLLabelElement).style.background = "#e5e7eb"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLLabelElement).style.background = "transparent"; }}
+                  >
+                    <input type="file" name="reply_attachment" style={{ display: "none" }} />
+                    <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.5 11.5l-7.5 7.5a5 5 0 01-7-7l8-8a3.5 3.5 0 015 5l-8 8a2 2 0 01-3-3l7-7" />
+                    </svg>
+                  </label>
+                </div>
+
+                {/* Rich-text editable area */}
+                <div style={{ position: "relative" }}>
+                  <div
+                    ref={replyEditorRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    data-placeholder="Write your reply…"
+                    onInput={(e) => setReplyHtml((e.currentTarget as HTMLDivElement).innerHTML)}
+                    onBlur={(e) => setReplyHtml((e.currentTarget as HTMLDivElement).innerHTML)}
+                    style={{
+                      width: "100%",
+                      minHeight: "120px",
+                      padding: "10px 52px 44px 12px",
+                      fontSize: "14px",
+                      color: "#202223",
+                      fontFamily: "inherit",
+                      lineHeight: 1.5,
+                      boxSizing: "border-box",
+                      outline: "none",
+                    }}
+                  />
+                  <style>{`
+                    [contenteditable][data-placeholder]:empty::before {
+                      content: attr(data-placeholder);
+                      color: #9ca3af;
+                      pointer-events: none;
+                    }
+                    [contenteditable] ul, [contenteditable] ol {
+                      padding-left: 24px;
+                      margin: 4px 0;
+                    }
+                  `}</style>
+                  {/* Send icon button — bottom right */}
+                  <button
+                    type="button"
+                    title="Send reply"
+                    onClick={handleSendReply}
+                    disabled={!replyHasContent}
+                    style={{
+                      position: "absolute",
+                      bottom: "10px",
+                      right: "10px",
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "50%",
+                      border: "none",
+                      background: replyHasContent ? "#2563eb" : "#e5e7eb",
+                      color: replyHasContent ? "#fff" : "#9ca3af",
+                      cursor: replyHasContent ? "pointer" : "default",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "background 0.15s",
+                    }}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M2.5 2l15 8-15 8V12l10-2-10-2V2z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           )}
