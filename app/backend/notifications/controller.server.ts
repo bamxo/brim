@@ -1,8 +1,7 @@
-import { Resend } from "resend";
 import supabase from "../../db/supabase.server";
+import { sendGmailMessage } from "../google/send.server";
+import { GmailNotConnectedError } from "../google/gmail-client.server";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = process.env.RESEND_FROM_ADDRESS ?? "orders@brimapp.com";
 const APP_URL = process.env.APP_URL ?? "https://brimapp.com";
 
 export type Notification = {
@@ -139,12 +138,7 @@ async function sendReorderEmail(
 
   const reviewUrl = `${APP_URL}${actionPath}`;
 
-  try {
-    await resend.emails.send({
-      from: FROM,
-      to: shop.email,
-      subject: `Reorder alert — ${poNumber}`,
-      html: `
+  const html = `
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
@@ -163,9 +157,20 @@ async function sendReorderEmail(
     Sent by ${shop.shop_name ?? shop.shopify_domain} via Brim
   </p>
 </body>
-</html>`,
+</html>`;
+
+  try {
+    await sendGmailMessage({
+      shopId,
+      to: shop.email,
+      subject: `Reorder alert — ${poNumber}`,
+      html,
     });
   } catch (err) {
+    if (err instanceof GmailNotConnectedError) {
+      console.warn("Skipping reorder email — Gmail not connected for shop", shopId);
+      return;
+    }
     console.error("Failed to send reorder email:", err);
   }
 }

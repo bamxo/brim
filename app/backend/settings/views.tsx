@@ -6,19 +6,53 @@ import type {
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../../shopify.server";
 import { getShopByDomain } from "../shops/controller.server";
+import {
+  createOAuthClient,
+  decryptAccountTokens,
+  deleteGoogleAccount,
+  getGoogleAccount,
+} from "../google/oauth.server";
+import { ensureWatch, stopWatch } from "../google/pubsub.server";
 import { getShopSettings, upsertShopSettings } from "./controller.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = await getShopByDomain(session.shop);
-  const settings = await getShopSettings(shop.id);
-  return { settings };
+  const [settings, googleAccount] = await Promise.all([
+    getShopSettings(shop.id),
+    getGoogleAccount(shop.id),
+  ]);
+  if (googleAccount && !googleAccount.is_disconnected) {
+    void ensureWatch(shop.id);
+  }
+  const google = googleAccount
+    ? {
+        email: googleAccount.google_email,
+        connectedAt: googleAccount.connected_at,
+        isDisconnected: googleAccount.is_disconnected,
+      }
+    : null;
+  return { settings, google, shopId: shop.id };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = await getShopByDomain(session.shop);
   const formData = await request.formData();
+  const intent = formData.get("intent");
+
+  if (intent === "disconnect-gmail") {
+    const account = await getGoogleAccount(shop.id);
+    if (account) {
+      try { await stopWatch(shop.id); } catch {}
+      try {
+        const { refreshToken } = decryptAccountTokens(account);
+        await createOAuthClient().revokeToken(refreshToken);
+      } catch {}
+      await deleteGoogleAccount(shop.id);
+    }
+    return { success: true, error: null, googleDisconnected: true };
+  }
 
   const criticalStockThreshold = Number(formData.get("critical_stock_threshold"));
   const supplierChaseDays = Number(formData.get("supplier_chase_days"));
