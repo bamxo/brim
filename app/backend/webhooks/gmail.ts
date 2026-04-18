@@ -7,6 +7,7 @@ import {
   updateHistoryId,
 } from "../google/oauth.server";
 import { parseMessage } from "../google/thread.server";
+import { extractTracking } from "../google/extract-tracking.server";
 
 type PubSubPayload = {
   message?: {
@@ -89,6 +90,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         .single();
 
       if (!po) continue;
+      if (po.status === "received") continue;
 
       const parsed = parseMessage(msg);
       const fromHeader = parsed.from.toLowerCase();
@@ -99,6 +101,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       const bodyText = parsed.bodyText ?? parsed.snippet ?? "";
       const { detectedDate, confidence } = extractDate(bodyText);
+      const tracking = extractTracking(bodyText);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any).from("supplier_replies").insert({
@@ -109,6 +112,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         raw_payload: { gmail_message_id: parsed.id, rfc822: parsed.rfc822MessageId },
         detected_date: detectedDate?.toISOString().slice(0, 10) ?? null,
         detected_date_confidence: confidence,
+        detected_tracking_number: tracking.trackingNumber,
+        detected_tracking_carrier: tracking.trackingNumber ? tracking.carrier : null,
+        detected_tracking_confidence: tracking.confidence,
         received_at: new Date().toISOString(),
       });
 
@@ -116,11 +122,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (detectedDate && (confidence === "high" || confidence === "medium")) {
         updatePayload.confirmed_delivery_date = detectedDate.toISOString().slice(0, 10);
       }
+      if (tracking.trackingNumber) {
+        updatePayload.tracking_number = tracking.trackingNumber;
+        updatePayload.tracking_carrier = tracking.carrier;
+        updatePayload.tracking_number_confidence = tracking.confidence;
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from("purchase_orders")
         .update(updatePayload)
         .eq("id", po.id);
+
+      const bodyParts: string[] = [];
+      if (detectedDate) bodyParts.push(`Delivery: ${detectedDate.toLocaleDateString()}`);
+      if (tracking.trackingNumber) bodyParts.push(`Tracking: ${tracking.trackingNumber}`);
+      const notifBody =
+        bodyParts.length > 0
+          ? bodyParts.join(" · ")
+          : "Reply received — please review the message.";
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any).from("notifications").insert({
@@ -128,9 +147,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         purchase_order_id: po.id,
         type: "supplier_replied",
         title: "Supplier replied",
-        body: detectedDate
-          ? `Delivery date detected: ${detectedDate.toLocaleDateString()}`
-          : "Reply received — please review the message.",
+        body: notifBody,
         action_url: `/app/purchase-orders/${po.id}`,
         is_read: false,
       });

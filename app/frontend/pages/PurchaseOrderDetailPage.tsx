@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useActionData, useLoaderData, useNavigate, useSubmit } from "react-router";
+import { useActionData, useLoaderData, useSubmit } from "react-router";
 import TitleBar from "../components/Header/TitleBar";
 
 type LineItem = {
@@ -34,6 +34,9 @@ type LoaderData = {
     total_amount: number;
     notes: string | null;
     confirmed_delivery_date: string | null;
+    tracking_number: string | null;
+    tracking_carrier: string | null;
+    tracking_number_confidence: string | null;
     gmail_thread_id: string | null;
     gmail_account_email: string | null;
     suppliers: { id: string; name: string; email: string; phone: string | null } | null;
@@ -71,10 +74,108 @@ function productLabel(p: SupplierProduct): string {
   return label;
 }
 
+function PencilIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11.5 2.5l2 2-8 8-2.5.5.5-2.5 8-8z" />
+    </svg>
+  );
+}
+
+type InlineEditRowProps = {
+  label: string;
+  value: string | null;
+  displayValue?: string | null;
+  hint?: string | null;
+  inputType?: "text" | "date";
+  onSave: (value: string) => void;
+};
+
+function InlineEditRow({
+  label,
+  value,
+  displayValue,
+  hint,
+  inputType = "text",
+  onSave,
+}: InlineEditRowProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value ?? "");
+
+  useEffect(() => {
+    setDraft(value ?? "");
+  }, [value]);
+
+  const commit = () => {
+    const trimmed = draft.trim();
+    if (trimmed !== (value ?? "")) onSave(trimmed);
+    setEditing(false);
+  };
+
+  const cancel = () => {
+    setDraft(value ?? "");
+    setEditing(false);
+  };
+
+  return (
+    <div>
+      <div style={{ fontSize: "12px", color: "#6d7175", marginBottom: "2px" }}>{label}</div>
+      {editing ? (
+        <input
+          autoFocus
+          type={inputType}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              (e.currentTarget as HTMLInputElement).blur();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              cancel();
+            }
+          }}
+          style={{
+            width: "100%",
+            fontSize: "14px",
+            padding: "4px 6px",
+            border: "1px solid #c9cccf",
+            borderRadius: "4px",
+            color: "#202223",
+            fontFamily: "inherit",
+          }}
+        />
+      ) : (
+        <div
+          onClick={() => setEditing(true)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            fontSize: "14px",
+            color: value ? "#202223" : "#9ca3af",
+            cursor: "pointer",
+            padding: "2px 0",
+          }}
+          title="Click to edit"
+        >
+          <span style={{ flex: 1 }}>{displayValue ?? value ?? "—"}</span>
+          <span style={{ color: "#6d7175", opacity: 0.7 }}>
+            <PencilIcon />
+          </span>
+        </div>
+      )}
+      {hint && !editing && (
+        <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "2px" }}>{hint}</div>
+      )}
+    </div>
+  );
+}
+
 export default function PurchaseOrderDetailPage() {
   const { po, pdfDataUrl, supplierProducts, gmail, thread, emailDraft } = useLoaderData<LoaderData>();
   const actionData = useActionData<ActionData>();
-  const navigate = useNavigate();
   const submit = useSubmit();
   const isDraft = po.status === "draft";
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
@@ -215,6 +316,17 @@ export default function PurchaseOrderDetailPage() {
     submit(fd, { method: "post" });
   }, [undoItem, submit]);
 
+  const handleUpdateField = useCallback(
+    (field: string, value: string) => {
+      const fd = new FormData();
+      fd.append("intent", "update-po-field");
+      fd.append("field", field);
+      fd.append("value", value);
+      submit(fd, { method: "post" });
+    },
+    [submit],
+  );
+
   const handleDownloadPdf = () => {
     if (!pdfDataUrl) return;
     const a = document.createElement("a");
@@ -243,6 +355,13 @@ export default function PurchaseOrderDetailPage() {
 
   const [replyHtml, setReplyHtml] = useState("");
   const replyEditorRef = useRef<HTMLDivElement | null>(null);
+  const threadScrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (threadScrollRef.current) {
+      threadScrollRef.current.scrollTop = threadScrollRef.current.scrollHeight;
+    }
+  }, []);
 
   const replyHasContent = replyHtml.replace(/<[^>]*>/g, "").trim().length > 0;
 
@@ -289,6 +408,13 @@ export default function PurchaseOrderDetailPage() {
     submit(fd, { method: "post" });
   };
 
+  const handleUnmarkReceived = () => {
+    if (!confirm("Mark this order as not received? Status will revert to its previous value.")) return;
+    const fd = new FormData();
+    fd.append("intent", "unmark-received");
+    submit(fd, { method: "post" });
+  };
+
   const handleCancelOrder = () => {
     if (!confirm("Are you sure you want to cancel this purchase order?")) return;
     const fd = new FormData();
@@ -311,20 +437,36 @@ export default function PurchaseOrderDetailPage() {
   const statusColors: Record<string, { bg: string; color: string }> = {
     draft: { bg: "#f3f4f6", color: "#6b7280" },
     sent: { bg: "#dbeafe", color: "#1d4ed8" },
+    supplier_replied: { bg: "#fef3c7", color: "#92400e" },
+    confirmed: { bg: "#d1fae5", color: "#065f46" },
+    in_transit: { bg: "#dbeafe", color: "#1d4ed8" },
+    partially_received: { bg: "#fef3c7", color: "#92400e" },
     received: { bg: "#d1fae5", color: "#065f46" },
+    overdue: { bg: "#fee2e2", color: "#b91c1c" },
+    dismissed: { bg: "#f3f4f6", color: "#6b7280" },
+    send_failed: { bg: "#fee2e2", color: "#b91c1c" },
     cancelled: { bg: "#fee2e2", color: "#b91c1c" },
   };
+
+  const STATUS_LABEL: Record<string, string> = {
+    draft: "Draft",
+    sent: "Sent",
+    supplier_replied: "Supplier replied",
+    confirmed: "Confirmed",
+    in_transit: "In transit",
+    partially_received: "Partially received",
+    received: "Received",
+    overdue: "Overdue",
+    dismissed: "Dismissed",
+    send_failed: "Send failed",
+    cancelled: "Cancelled",
+  };
+
   const statusStyle = statusColors[po.status] ?? { bg: "#f3f4f6", color: "#374151" };
+  const statusLabel = STATUS_LABEL[po.status] ?? po.status;
 
   return (
     <TitleBar heading={po.po_number} breadcrumbs={[{ label: "Purchase Orders", href: "/app/purchase-orders" }]}>
-      <s-button
-        slot="secondary-action"
-        onClick={() => navigate("/app/purchase-orders")}
-      >
-        Back
-      </s-button>
-
       {actionData?.error && (
         <s-banner tone="critical" heading="Error">
           <s-paragraph>{actionData.error}</s-paragraph>
@@ -375,20 +517,39 @@ export default function PurchaseOrderDetailPage() {
                   fontWeight: 600,
                   background: statusStyle.bg,
                   color: statusStyle.color,
-                  textTransform: "capitalize",
                 }}
               >
-                {po.status}
+                {statusLabel}
               </span>
             </div>
-            {po.confirmed_delivery_date && (
-              <div>
-                <div style={{ fontSize: "12px", color: "#6d7175", marginBottom: "2px" }}>Delivery date</div>
-                <div style={{ fontSize: "14px", color: "#202223" }}>
-                  {new Date(po.confirmed_delivery_date).toLocaleDateString()}
-                </div>
-              </div>
-            )}
+            <InlineEditRow
+              label="Delivery date"
+              value={po.confirmed_delivery_date}
+              displayValue={
+                po.confirmed_delivery_date
+                  ? new Date(`${po.confirmed_delivery_date}T00:00:00`).toLocaleDateString()
+                  : null
+              }
+              inputType="date"
+              onSave={(val) => handleUpdateField("confirmed_delivery_date", val)}
+            />
+            <InlineEditRow
+              label="Tracking number"
+              value={po.tracking_number}
+              displayValue={
+                po.tracking_number
+                  ? po.tracking_carrier && po.tracking_carrier !== "unknown"
+                    ? `${po.tracking_number} · ${po.tracking_carrier.toUpperCase()}`
+                    : po.tracking_number
+                  : null
+              }
+              hint={
+                po.tracking_number && po.tracking_number_confidence === "low"
+                  ? "Detected — please verify"
+                  : null
+              }
+              onSave={(val) => handleUpdateField("tracking_number", val)}
+            />
             {po.notes && (
               <div>
                 <div style={{ fontSize: "12px", color: "#6d7175", marginBottom: "2px" }}>Notes</div>
@@ -413,18 +574,24 @@ export default function PurchaseOrderDetailPage() {
           </div>
         </s-section>
 
-        {/* Actions card — shown for non-draft orders */}
-        {!isDraft && po.status !== "received" && po.status !== "cancelled" && (
+        {/* Actions card — shown for all non-draft, non-cancelled orders */}
+        {!isDraft && po.status !== "cancelled" && (
           <s-section heading="Actions">
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {po.status === "sent" && (
+              {po.status === "received" ? (
+                <s-button onClick={handleUnmarkReceived}>
+                  Mark as not received
+                </s-button>
+              ) : (
                 <s-button variant="primary" onClick={handleMarkReceived}>
                   Mark as received
                 </s-button>
               )}
-              <s-button tone="critical" onClick={handleCancelOrder}>
-                Cancel order
-              </s-button>
+              {po.status !== "received" && (
+                <s-button tone="critical" onClick={handleCancelOrder}>
+                  Cancel order
+                </s-button>
+              )}
             </div>
           </s-section>
         )}
@@ -733,6 +900,7 @@ export default function PurchaseOrderDetailPage() {
       {thread && thread.messages.length > 0 && (
         <s-section heading="Email thread">
           <div
+            ref={threadScrollRef}
             style={{
               display: "flex",
               flexDirection: "column",

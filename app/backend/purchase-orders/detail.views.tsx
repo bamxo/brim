@@ -623,6 +623,102 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     return { success: true, error: null, removedLine };
   }
 
+  if (intent === "mark-received") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: current } = await (supabase as any)
+      .from("purchase_orders")
+      .select("status")
+      .eq("id", params.id)
+      .eq("shop_id", shop.id)
+      .single();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from("purchase_orders")
+      .update({ status: "received", previous_status: current?.status ?? null })
+      .eq("id", params.id)
+      .eq("shop_id", shop.id);
+    if (error) return { success: false, error: `Failed to mark as received: ${error.message}` };
+    return { success: true, error: null };
+  }
+
+  if (intent === "unmark-received") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: current } = await (supabase as any)
+      .from("purchase_orders")
+      .select("previous_status")
+      .eq("id", params.id)
+      .eq("shop_id", shop.id)
+      .single();
+
+    const revertTo = current?.previous_status ?? "confirmed";
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from("purchase_orders")
+      .update({ status: revertTo, previous_status: null })
+      .eq("id", params.id)
+      .eq("shop_id", shop.id);
+    if (error) return { success: false, error: `Failed to update status: ${error.message}` };
+    return { success: true, error: null };
+  }
+
+  if (intent === "cancel-order") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from("purchase_orders")
+      .update({ status: "cancelled" })
+      .eq("id", params.id)
+      .eq("shop_id", shop.id);
+    if (error) return { success: false, error: `Failed to cancel order: ${error.message}` };
+    return { success: true, error: null };
+  }
+
+  if (intent === "update-po-field") {
+    const field = String(formData.get("field") ?? "");
+    const rawValue = formData.get("value");
+    const value = rawValue == null ? "" : String(rawValue).trim();
+
+    const allowedFields = new Set([
+      "confirmed_delivery_date",
+      "tracking_number",
+      "tracking_carrier",
+    ]);
+    if (!allowedFields.has(field)) {
+      return { success: false, error: "Invalid field" };
+    }
+
+    const updatePayload: Record<string, unknown> = {};
+
+    if (field === "confirmed_delivery_date") {
+      if (value === "") {
+        updatePayload.confirmed_delivery_date = null;
+      } else if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return { success: false, error: "Invalid date format (expected YYYY-MM-DD)" };
+      } else {
+        updatePayload.confirmed_delivery_date = value;
+      }
+    } else if (field === "tracking_number") {
+      updatePayload.tracking_number = value === "" ? null : value;
+      updatePayload.tracking_number_confidence = null;
+    } else if (field === "tracking_carrier") {
+      updatePayload.tracking_carrier = value === "" ? null : value;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updateError } = await (supabase as any)
+      .from("purchase_orders")
+      .update(updatePayload)
+      .eq("id", params.id)
+      .eq("shop_id", shop.id);
+
+    if (updateError) {
+      return { success: false, error: `Failed to update: ${updateError.message}` };
+    }
+
+    return { success: true, error: null };
+  }
+
   return { success: false, error: "Unknown action" };
 };
 
