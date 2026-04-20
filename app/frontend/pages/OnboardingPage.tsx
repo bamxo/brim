@@ -10,10 +10,10 @@ type OnboardingStatus = {
   allComplete: boolean;
 };
 
-type LoaderData = { status: OnboardingStatus; shopId: string };
+type LoaderData = { status: OnboardingStatus; shopId: string; forceOnboarding: boolean };
 
 export default function OnboardingPage() {
-  const { status, shopId } = useLoaderData<LoaderData>();
+  const { status, shopId, forceOnboarding } = useLoaderData<LoaderData>();
   const navigate = useNavigate();
   const { revalidate } = useRevalidator();
 
@@ -115,6 +115,12 @@ export default function OnboardingPage() {
             ))}
           </div>
 
+          {forceOnboarding && (
+            <div style={{ marginBottom: "16px" }}>
+              <s-badge tone="info">Dev preview</s-badge>
+            </div>
+          )}
+
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
             {(() => {
               if (!status.gmailConnected) {
@@ -141,6 +147,21 @@ export default function OnboardingPage() {
               return null;
             })()}
             <s-link href="#">Quick Tour Video</s-link>
+          </div>
+
+          <div style={{ marginTop: "20px", paddingTop: "16px", borderTop: "1px solid var(--s-color-border, #E1E3E5)" }}>
+            <s-button
+              variant="secondary"
+              onClick={() => {
+                if (forceOnboarding) {
+                  navigate("/app/onboarding");
+                } else {
+                  navigate("/app/onboarding?force=1");
+                }
+              }}
+            >
+              {forceOnboarding ? "Exit preview mode" : "Preview onboarding"}
+            </s-button>
           </div>
         </div>
 

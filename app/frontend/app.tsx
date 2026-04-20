@@ -24,12 +24,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const url = new URL(request.url);
   const isOnboardingPage = url.pathname === "/app/onboarding";
-  const forceOnboarding = process.env.FORCE_ONBOARDING === "true";
+  const forceOnboarding = process.env.FORCE_ONBOARDING === "true" || url.searchParams.get("force") === "1";
 
   const status = await getOnboardingStatus(shop.id);
 
   if ((forceOnboarding || !status.allComplete) && !isOnboardingPage) {
-    return redirect("/app/onboarding");
+    const dest = forceOnboarding ? "/app/onboarding?force=1" : "/app/onboarding";
+    return redirect(dest);
   }
 
   const notifications = await getUnreadNotifications(shop.id);

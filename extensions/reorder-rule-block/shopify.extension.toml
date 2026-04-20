@@ -7,5 +7,5 @@ name = "Reorder Rule Block"
 handle = "reorder-rule-block"
 
   [[extensions.targeting]]
-  module = "./src/BlockExtension.tsx"
+  module = "./src/BlockExtension.jsx"
   target = "admin.product-details.block.render"

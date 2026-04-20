@@ -8,14 +8,15 @@ import { getOnboardingStatus } from "./controller.server";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = await getShopByDomain(session.shop);
-  const forceOnboarding = process.env.FORCE_ONBOARDING === "true";
+  const url = new URL(request.url);
+  const forceOnboarding = process.env.FORCE_ONBOARDING === "true" || url.searchParams.get("force") === "1";
   const status = await getOnboardingStatus(shop.id);
 
   if (status.allComplete && !forceOnboarding) {
     return redirect("/app");
   }
 
-  return { status, shopId: shop.id };
+  return { status, shopId: shop.id, forceOnboarding };
 };
 
 export { default } from "../../frontend/pages/OnboardingPage";
