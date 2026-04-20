@@ -13,7 +13,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const status = await getOnboardingStatus(shop.id);
 
   if (status.allComplete && !forceOnboarding) {
-    return redirect("/app");
+    const params = new URLSearchParams();
+    for (const key of ["shop", "host", "embedded", "session"]) {
+      const val = url.searchParams.get(key);
+      if (val) params.set(key, val);
+    }
+    const dest = params.size > 0 ? `/app?${params.toString()}` : "/app";
+    return redirect(dest);
   }
 
   return { status, shopId: shop.id, forceOnboarding };

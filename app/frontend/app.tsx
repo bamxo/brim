@@ -29,7 +29,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const status = await getOnboardingStatus(shop.id);
 
   if ((forceOnboarding || !status.allComplete) && !isOnboardingPage) {
-    const dest = forceOnboarding ? "/app/onboarding?force=1" : "/app/onboarding";
+    const params = new URLSearchParams();
+    // Preserve Shopify embedded app params so App Bridge stays authenticated
+    for (const key of ["shop", "host", "embedded", "session"]) {
+      const val = url.searchParams.get(key);
+      if (val) params.set(key, val);
+    }
+    if (forceOnboarding) params.set("force", "1");
+    const dest = params.size > 0 ? `/app/onboarding?${params.toString()}` : "/app/onboarding";
     return redirect(dest);
   }
 
