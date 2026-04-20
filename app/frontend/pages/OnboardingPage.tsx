@@ -116,9 +116,30 @@ export default function OnboardingPage() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <s-button variant="primary" onClick={() => navigate("/app/suppliers/new")}>
-              Connect Supplier
-            </s-button>
+            {(() => {
+              if (!status.gmailConnected) {
+                return (
+                  <s-button variant="primary" onClick={handleConnectGmail}>
+                    Connect Gmail
+                  </s-button>
+                );
+              }
+              if (!status.supplierAdded) {
+                return (
+                  <s-button variant="primary" onClick={() => navigate("/app/suppliers/new")}>
+                    Connect Supplier
+                  </s-button>
+                );
+              }
+              if (!status.reorderConfigured) {
+                return (
+                  <s-button variant="primary" onClick={() => navigate("/app/products")}>
+                    Set Reorder Point
+                  </s-button>
+                );
+              }
+              return null;
+            })()}
             <s-link href="#">Quick Tour Video</s-link>
           </div>
         </div>
