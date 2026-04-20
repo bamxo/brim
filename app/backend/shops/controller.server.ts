@@ -10,6 +10,7 @@ export type Shop = {
   currency: string;
   timezone: string | null;
   is_active: boolean;
+  onboarding_gmail_skipped: boolean;
   installed_at: string | null;
   uninstalled_at: string | null;
   created_at: string;
@@ -49,6 +50,16 @@ export async function getShopByDomain(shopDomain: string): Promise<Shop> {
 
   if (error) throw new Error(`Shop not found for domain ${shopDomain}: ${error.message}`);
   return data as Shop;
+}
+
+export async function setGmailSkipped(shopId: string, skipped: boolean): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("shops")
+    .update({ onboarding_gmail_skipped: skipped })
+    .eq("id", shopId);
+
+  if (error) throw new Error(`Failed to update gmail skipped: ${error.message}`);
 }
 
 export async function deactivateShop(shopDomain: string): Promise<void> {

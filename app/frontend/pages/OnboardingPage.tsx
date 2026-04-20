@@ -4,6 +4,7 @@ import checklistSvg from "../assets/checklist.svg";
 
 type OnboardingStatus = {
   gmailConnected: boolean;
+  gmailSkipped: boolean;
   supplierAdded: boolean;
   reorderConfigured: boolean;
   allComplete: boolean;
@@ -37,37 +38,33 @@ export default function OnboardingPage({ status, shopId, forceOnboarding }: Prop
 
   const steps = [
     {
-      label: "Connect Gmail and allow access",
-      complete: status.gmailConnected,
+      label: "Connect Gmail (optional)",
+      bullets: [
+        "Send POs from your own address",
+        "View supplier replies inside Brim",
+      ],
+      skippable: true,
+      complete: status.gmailConnected || status.gmailSkipped,
       cta: "Connect Gmail",
       onAction: handleConnectGmail,
     },
     {
-      label: "Connect first supplier",
+      label: "Add first supplier",
+      bullets: null,
+      skippable: false,
       complete: status.supplierAdded,
       cta: "Add supplier",
       onAction: () => navigate("/app/suppliers/new"),
     },
     {
       label: "Configure a product",
+      bullets: null,
+      skippable: false,
       complete: status.reorderConfigured,
       cta: "Set reorder point",
       onAction: () => navigate("/app/products"),
     },
   ];
-
-  const primaryAction = (() => {
-    if (!status.gmailConnected) {
-      return { label: "Connect Gmail", onAction: handleConnectGmail };
-    }
-    if (!status.supplierAdded) {
-      return { label: "Add supplier", onAction: () => navigate("/app/suppliers/new") };
-    }
-    if (!status.reorderConfigured) {
-      return { label: "Set reorder point", onAction: () => navigate("/app/products") };
-    }
-    return null;
-  })();
 
   return (
     <div style={{ marginTop: 32, maxWidth: 720, marginLeft: "auto", marginRight: "auto", width: "100%" }}>
@@ -126,6 +123,7 @@ export default function OnboardingPage({ status, shopId, forceOnboarding }: Prop
                             alignItems: "center",
                             width: 20,
                             flexShrink: 0,
+                            alignSelf: "stretch",
                           }}
                         >
                           <StepIndicator state={state} />
@@ -133,7 +131,8 @@ export default function OnboardingPage({ status, shopId, forceOnboarding }: Prop
                             <div
                               style={{
                                 width: 2,
-                                height: 15,
+                                flex: 1,
+                                minHeight: 12,
                                 margin: "3px 0",
                                 background:
                                   state === "done"
@@ -146,50 +145,77 @@ export default function OnboardingPage({ status, shopId, forceOnboarding }: Prop
                         <div
                           style={{
                             display: "flex",
-                            alignItems: "center",
+                            flexDirection: "column",
                             gap: 8,
-                            height: 20,
                             paddingBottom: isLast ? 0 : 16,
+                            whiteSpace: "normal",
                           }}
                         >
+                          {/* Label row */}
                           <s-text
-                            type={state === "upcoming" ? undefined : "strong"}
+                            type={state === "done" ? undefined : "strong"}
                             color={state === "done" ? "subdued" : undefined}
                           >
                             {i + 1}. {step.label}
                           </s-text>
-                          {state === "done" ? (
-                            <span
-                              style={{
-                                fontSize: 13,
-                                fontWeight: 500,
-                                color: "#1A7A4C",
-                              }}
-                            >
-                              Done
-                            </span>
-                          ) : (
-                            <a
-                              href="#"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                step.onAction();
-                              }}
-                              style={{
-                                fontSize: 13,
-                                color: "var(--s-color-text-link, #005BD3)",
-                                textDecoration: "none",
-                                whiteSpace: "nowrap",
-                              }}
-                              onMouseEnter={(e) =>
-                                (e.currentTarget.style.textDecoration = "underline")
-                              }
-                              onMouseLeave={(e) =>
-                                (e.currentTarget.style.textDecoration = "none")
-                              }
-                            >
-                              {step.cta} →
-                            </a>
+
+                          {/* Expanded content — only when current */}
+                          {state === "current" && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              {step.bullets && (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                  {step.bullets.map((b, bi) => (
+                                    <div
+                                      key={bi}
+                                      style={{ display: "flex", alignItems: "center", gap: 6 }}
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                        <circle cx="7" cy="7" r="7" fill="#1A7A4C" />
+                                        <path
+                                          d="M3.5 7L5.8 9.5L10.5 4.5"
+                                          stroke="white"
+                                          strokeWidth="1.5"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        />
+                                      </svg>
+                                      <span style={{ fontSize: 13, color: "var(--s-color-text, #202223)" }}>
+                                        {b}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                <s-button variant="primary" onClick={step.onAction}>
+                                  {step.cta}
+                                </s-button>
+                                {step.skippable && (
+                                  <a
+                                    href="#"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      const fd = new FormData();
+                                      fd.append("intent", "skip-gmail");
+                                      fetcher.submit(fd, { method: "post" });
+                                    }}
+                                    style={{
+                                      fontSize: 13,
+                                      color: "var(--s-color-text-subdued, #6D7175)",
+                                      textDecoration: "none",
+                                    }}
+                                    onMouseEnter={(e) =>
+                                      (e.currentTarget.style.textDecoration = "underline")
+                                    }
+                                    onMouseLeave={(e) =>
+                                      (e.currentTarget.style.textDecoration = "none")
+                                    }
+                                  >
+                                    Skip for now
+                                  </a>
+                                )}
+                              </div>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -197,17 +223,8 @@ export default function OnboardingPage({ status, shopId, forceOnboarding }: Prop
                   })}
                 </div>
 
-                <s-stack direction="inline" gap="base" alignItems="center">
-                  {primaryAction && (
-                    <s-button variant="primary" onClick={primaryAction.onAction}>
-                      {primaryAction.label}
-                    </s-button>
-                  )}
-                  <s-link href="#">Quick tour video</s-link>
+                <s-stack direction="inline" gap="small-200" alignItems="center">
                   {forceOnboarding && <s-badge tone="info">Dev preview</s-badge>}
-                </s-stack>
-
-                <s-stack direction="inline" gap="small-200">
                   <s-button
                     variant="tertiary"
                     onClick={() => {
