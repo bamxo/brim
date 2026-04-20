@@ -18,6 +18,7 @@ export default [
     route("suppliers/new",        "backend/suppliers/new.views.tsx"),
     route("suppliers/:id",        "backend/suppliers/detail.views.tsx"),
     route("settings",             "backend/settings/views.tsx"),
+    route("forecasts",            "backend/forecasts/views.tsx"),
   ]),
 
   // ── Extension resource routes (no layout, CORS-enabled) ───────────────
