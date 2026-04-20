@@ -3,7 +3,7 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { Outlet, useLoaderData, useNavigate, useRouteError } from "react-router";
+import { Outlet, redirect, useLoaderData, useNavigate, useRouteError } from "react-router";
 import { useFetcher } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
@@ -16,10 +16,22 @@ import {
   markNotificationDismissed,
 } from "../backend/notifications/controller.server";
 import type { Notification } from "../backend/notifications/controller.server";
+import { getOnboardingStatus } from "../backend/onboarding/controller.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = await upsertShop(session);
+
+  const url = new URL(request.url);
+  const isOnboardingPage = url.pathname === "/app/onboarding";
+  const forceOnboarding = process.env.FORCE_ONBOARDING === "true";
+
+  const status = await getOnboardingStatus(shop.id);
+
+  if ((forceOnboarding || !status.allComplete) && !isOnboardingPage) {
+    return redirect("/app/onboarding");
+  }
+
   const notifications = await getUnreadNotifications(shop.id);
   // eslint-disable-next-line no-undef
   return { apiKey: process.env.SHOPIFY_API_KEY || "", notifications };
