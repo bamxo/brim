@@ -19,6 +19,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     atRiskResult,
     unconfirmedResult,
     overdueResult,
+    draftResult,
+    arrivingResult,
+    stockLevelsResult,
   ] = await Promise.all([
     // Open PO count
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -94,6 +97,52 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       .not("confirmed_delivery_date", "is", null)
       .lt("confirmed_delivery_date", now.toISOString())
       .order("confirmed_delivery_date", { ascending: true }),
+
+    // Draft POs waiting to be sent
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("purchase_orders")
+      .select(
+        `
+        id, po_number, created_at,
+        suppliers (id, name)
+      `,
+      )
+      .eq("shop_id", shopId)
+      .eq("status", "draft")
+      .order("created_at", { ascending: true }),
+
+    // Confirmed POs with an upcoming delivery date (arriving soon)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("purchase_orders")
+      .select(
+        `
+        id, po_number, confirmed_delivery_date,
+        suppliers (id, name)
+      `,
+      )
+      .eq("shop_id", shopId)
+      .in("status", ["confirmed", "in_transit"])
+      .not("confirmed_delivery_date", "is", null)
+      .gte("confirmed_delivery_date", now.toISOString())
+      .order("confirmed_delivery_date", { ascending: true }),
+
+    // All active rules for days-of-stock chart (sorted by stock ratio asc)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("reorder_rules")
+      .select(
+        `
+        id,
+        reorder_point,
+        products!inner (
+          id, title, current_stock
+        )
+      `,
+      )
+      .eq("shop_id", shopId)
+      .eq("is_active", true),
   ]);
 
   // Filter at-risk products to only those where current_stock <= reorder_point
@@ -149,6 +198,43 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }),
   );
 
+  const draftPOs = ((draftResult.data ?? []) as PORow[]).map((po) => ({
+    id: po.id,
+    poNumber: po.po_number,
+    createdAt: po.created_at,
+    supplierName: po.suppliers?.name ?? null,
+    supplierId: po.suppliers?.id ?? null,
+  }));
+
+  type StockRow = {
+    id: string;
+    reorder_point: number;
+    products: { id: string; title: string; current_stock: number };
+  };
+
+  // Sort by stock/reorder_point ratio ascending (least days first), take top 5
+  const stockLevels = ((stockLevelsResult.data ?? []) as StockRow[])
+    .map((r) => ({
+      productId: r.products.id,
+      title: r.products.title,
+      currentStock: r.products.current_stock,
+      reorderPoint: r.reorder_point,
+      // rough days estimate: if current_stock <= 0, 0 days; else scale by reorder_point as ~30-day proxy
+      daysEstimate: r.reorder_point > 0
+        ? Math.round((r.products.current_stock / r.reorder_point) * 30)
+        : r.products.current_stock > 0 ? 999 : 0,
+    }))
+    .sort((a, b) => a.daysEstimate - b.daysEstimate)
+    .slice(0, 5);
+
+  const arrivingSoon = ((arrivingResult.data ?? []) as PORow[]).map((po) => ({
+    id: po.id,
+    poNumber: po.po_number,
+    expectedDelivery: po.confirmed_delivery_date!,
+    supplierName: po.suppliers?.name ?? null,
+    supplierId: po.suppliers?.id ?? null,
+  }));
+
   return {
     shopName: shop.shop_name ?? session.shop,
     stats: {
@@ -156,10 +242,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       suppliers: supplierResult.count ?? 0,
       products: productResult.count ?? 0,
       atRiskCount: atRiskProducts.length,
+      arrivingCount: arrivingSoon.length,
     },
     atRiskProducts,
     unconfirmedPOs,
     overdueDeliveries,
+    draftPOs,
+    arrivingSoon,
+    stockLevels,
   };
 };
 
