@@ -6,6 +6,7 @@ import OnboardingPage from "./OnboardingPage";
 
 type OnboardingStatus = {
   gmailConnected: boolean;
+  gmailSkipped: boolean;
   supplierAdded: boolean;
   reorderConfigured: boolean;
   allComplete: boolean;

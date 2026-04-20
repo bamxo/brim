@@ -10,6 +10,7 @@ import {
   getOnboardingStatus,
   resetOnboarding,
 } from "../onboarding/controller.server";
+import { setGmailSkipped } from "../shops/controller.server";
 import supabase from "../../db/supabase.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -21,6 +22,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (intent === "reset-onboarding") {
     await resetOnboarding(shop.id);
     return { resetOk: true };
+  }
+
+  if (intent === "skip-gmail") {
+    await setGmailSkipped(shop.id, true);
+    return { skipOk: true };
   }
 
   return { error: "Unknown intent" };
