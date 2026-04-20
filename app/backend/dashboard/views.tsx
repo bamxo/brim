@@ -1,13 +1,40 @@
-import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
+import type {
+  ActionFunctionArgs,
+  HeadersFunction,
+  LoaderFunctionArgs,
+} from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../../shopify.server";
 import { getShopByDomain } from "../shops/controller.server";
+import {
+  getOnboardingStatus,
+  resetOnboarding,
+} from "../onboarding/controller.server";
 import supabase from "../../db/supabase.server";
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const shop = await getShopByDomain(session.shop);
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+
+  if (intent === "reset-onboarding") {
+    await resetOnboarding(shop.id);
+    return { resetOk: true };
+  }
+
+  return { error: "Unknown intent" };
+};
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = await getShopByDomain(session.shop);
   const shopId = shop.id;
+  const url = new URL(request.url);
+  // eslint-disable-next-line no-undef
+  const forceOnboarding =
+    process.env.FORCE_ONBOARDING === "true" || url.searchParams.get("force") === "1";
+  const onboardingStatus = await getOnboardingStatus(shopId);
 
   const now = new Date();
 
@@ -237,6 +264,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return {
     shopName: shop.shop_name ?? session.shop,
+    shopId,
+    onboardingStatus,
+    forceOnboarding,
     stats: {
       openPOs: openPOResult.count ?? 0,
       suppliers: supplierResult.count ?? 0,
