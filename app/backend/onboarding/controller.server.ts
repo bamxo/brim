@@ -43,3 +43,22 @@ export async function getOnboardingStatus(
     allComplete: gmailConnected && supplierAdded && reorderConfigured,
   };
 }
+
+export async function resetOnboarding(shopId: string): Promise<void> {
+  await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("shop_google_accounts")
+      .update({ is_disconnected: true })
+      .eq("shop_id", shopId),
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("suppliers")
+      .update({ is_active: false })
+      .eq("shop_id", shopId),
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).from("reorder_rules").delete().eq("shop_id", shopId),
+  ]);
+}

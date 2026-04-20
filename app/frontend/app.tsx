@@ -3,7 +3,7 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { Outlet, redirect, useLoaderData, useNavigate, useRouteError } from "react-router";
+import { Outlet, useLoaderData, useNavigate, useRouteError } from "react-router";
 import { useFetcher } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
@@ -16,30 +16,10 @@ import {
   markNotificationDismissed,
 } from "../backend/notifications/controller.server";
 import type { Notification } from "../backend/notifications/controller.server";
-import { getOnboardingStatus } from "../backend/onboarding/controller.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = await upsertShop(session);
-
-  const url = new URL(request.url);
-  const isOnboardingPage = url.pathname === "/app/onboarding";
-  const forceOnboarding = process.env.FORCE_ONBOARDING === "true" || url.searchParams.get("force") === "1";
-
-  const status = await getOnboardingStatus(shop.id);
-
-  if ((forceOnboarding || !status.allComplete) && !isOnboardingPage) {
-    const params = new URLSearchParams();
-    // Preserve Shopify embedded app params so App Bridge stays authenticated
-    for (const key of ["shop", "host", "embedded", "session"]) {
-      const val = url.searchParams.get(key);
-      if (val) params.set(key, val);
-    }
-    if (forceOnboarding) params.set("force", "1");
-    const dest = params.size > 0 ? `/app/onboarding?${params.toString()}` : "/app/onboarding";
-    return redirect(dest);
-  }
-
   const notifications = await getUnreadNotifications(shop.id);
   // eslint-disable-next-line no-undef
   return { apiKey: process.env.SHOPIFY_API_KEY || "", notifications };

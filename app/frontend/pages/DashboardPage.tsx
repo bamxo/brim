@@ -2,6 +2,14 @@ import { useState } from "react";
 import { useLoaderData, useNavigate } from "react-router";
 import cloudSvg from "../assets/cloud.svg";
 import TitleBar from "../components/Header/TitleBar";
+import OnboardingPage from "./OnboardingPage";
+
+type OnboardingStatus = {
+  gmailConnected: boolean;
+  supplierAdded: boolean;
+  reorderConfigured: boolean;
+  allComplete: boolean;
+};
 
 type AtRiskProduct = {
   ruleId: string;
@@ -57,6 +65,9 @@ type StockLevel = {
 
 type LoaderData = {
   shopName: string;
+  shopId: string;
+  onboardingStatus: OnboardingStatus;
+  forceOnboarding: boolean;
   stats: {
     openPOs: number;
     suppliers: number;
@@ -93,8 +104,23 @@ export default function DashboardPage() {
     draftPOs,
     arrivingSoon,
     stockLevels,
+    onboardingStatus,
+    shopId,
+    forceOnboarding,
   } = useLoaderData<LoaderData>();
   const navigate = useNavigate();
+
+  if (!onboardingStatus.allComplete || forceOnboarding) {
+    return (
+      <TitleBar heading="Dashboard">
+        <OnboardingPage
+          status={onboardingStatus}
+          shopId={shopId}
+          forceOnboarding={forceOnboarding}
+        />
+      </TitleBar>
+    );
+  }
 
   const actionCards: ActionCard[] = [
     ...overdueDeliveries.map((po) => ({
@@ -250,6 +276,12 @@ export default function DashboardPage() {
             onClick={() => setPreviewEmpty(true)}
           >
             Preview empty
+          </s-button>
+          <s-button
+            variant="secondary"
+            onClick={() => navigate("/app?force=1")}
+          >
+            Preview onboarding
           </s-button>
         </s-stack>
         {isCaughtUp ? (
