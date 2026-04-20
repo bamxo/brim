@@ -8,6 +8,7 @@ export default [
   // ── Authenticated app (layout wraps all /app/* pages) ──────────────────
   route("app", "frontend/app.tsx", [
     index("backend/dashboard/views.tsx"),
+    route("onboarding",           "backend/onboarding/views.tsx"),
     route("products",             "backend/products/views.tsx"),
     route("products/:id",         "backend/products/detail.views.tsx"),
     route("purchase-orders",      "backend/purchase-orders/views.tsx"),
